@@ -1,4 +1,5 @@
 import sys
+import argparse
 from riceKB.globalVars import *
 from riceKB.utils import *
 import pprint
@@ -103,21 +104,20 @@ def RDFRegulate(ds, regulation_rdf):
 #      http://purl.obolibrary.org/obo/RO_0002211
         rdf_writer.write(buffer)
         print(buffer)
-pp = pprint.PrettyPrinter(indent=4)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert PlantTFDB gene family and regulation files to RDF.")
+    parser.add_argument("tf_list", help="transcription factor family list (e.g. Mes_TF_list.txt)")
+    parser.add_argument("tf_output", help="output Turtle file for the gene family RDF")
+    parser.add_argument("regulation_file", help="regulation file (e.g. regulation_merged_Mes.txt)")
+    parser.add_argument("regulation_output", help="output Turtle file for the regulation RDF")
+    args = parser.parse_args()
 
-#TEST PARAM
-path = '/Users/pierre/workspace2015/datasets/Mes_TF_list.txt'
-regulation_file = '/Users/pierre/workspace2015/datasets/regulation_merged_Mes.txt'
-regulation_output = '/Users/pierre/workspace2015/datasets/regulation_merged_Mes.ttl'
-path_output = '/Users/pierre/workspace2015/datasets/Mes_TF_list.ttl' # The output
-#path = '/opt/TOS_DI-20141207_1530-V5.6.1/workspace/gff_data_orygeneDB/os_japonica/os_indicaCancat.gff3'    # The input
-#path_output = '/home/elhassouni/Bureau/japonica.ttl' # The output
-ds = geneParser(path)   # The parsing file
-pp.pprint(ds)    # For to see in teminal the parsing
+    ds = geneParser(args.tf_list)
+    RDFConverter(ds, args.tf_output)
+    ds2 = geneParser(args.regulation_file)
+    RDFRegulate(ds2, args.regulation_output)
 
-#os_indicaModele(ds, path_output)  # The path_output)  # The tranformation fonction tropGeneToRdf(input, output)
 
-RDFConverter(ds, path_output)
-ds2 = geneParser(regulation_file)
-pp.pprint(ds2)
-RDFRegulate(ds2,regulation_output)
+if __name__ == "__main__":
+    main()

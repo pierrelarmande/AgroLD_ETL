@@ -1,4 +1,5 @@
 import sys
+import argparse
 from riceKB.globalVars import *
 from riceKB.utils import *
 import pprint
@@ -114,18 +115,17 @@ def fileParser(infile,list, mapping, outfile):
 
 
 
-#TEST PARAM
-path1 = '/Users/pierre/workspace2015/datasets/ParentChildTreeFile.txt'
-path2 ='/Users/pierre/workspace2015/datasets/entry.list'
-path3 = '/Users/pierre/workspace2015/datasets/interpro2go'
-path_output = '/Users/pierre/workspace2015/datasets/interpro.ttl' # The output
-#path = '/opt/TOS_DI-20141207_1530-V5.6.1/workspace/gff_data_orygeneDB/os_japonica/os_indicaCancat.gff3'    # The input
-#path_output = '/home/elhassouni/Bureau/japonica.ttl' # The output
-#ds = geneParser(path)   # The parsing file
-#pp.pprint(ds)    # For to see in teminal the parsing
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert InterPro's ParentChildTreeFile, entry list and "
+                    "GO mapping to RDF.")
+    parser.add_argument("tree_file", help="ParentChildTreeFile.txt (entry hierarchy)")
+    parser.add_argument("entry_list", help="entry.list (id, type, label)")
+    parser.add_argument("go_mapping", help="interpro2go (id -> GO term mapping)")
+    parser.add_argument("output", help="output Turtle file")
+    args = parser.parse_args()
+    fileParser(args.tree_file, args.entry_list, args.go_mapping, args.output)
 
-#os_indicaModele(ds, path_output)  # The path_output)  # The tranformation fonction tropGeneToRdf(input, output)
 
-#RDFConverter(ds, path_output)
-
-fileParser(path1,path2,path3,path_output)
+if __name__ == "__main__":
+    main()
