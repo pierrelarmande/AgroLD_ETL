@@ -6,10 +6,16 @@ internals. Paths come from config.yaml.
 
     snakemake --cores 1 --configfile config.yaml
     snakemake --cores 1 -n                       # dry run
+    snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
 
 Only interpro and plantTFDB are wired in so far (stringDB has no parser yet
 to call; uniprotToRDF is handled separately). Add a source by giving it its
 own `rule <name>:` below and listing it in `rule all`'s inputs.
+
+Both current rules are light enough that profiles/slurm/config.yaml's
+default resources cover them; give a heavier future rule its own
+`resources:` block (e.g. a bigger mem_mb_per_cpu or a different
+slurm_partition) rather than raising that shared default.
 """
 configfile: "config.yaml"
 

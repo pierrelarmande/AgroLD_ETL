@@ -1,0 +1,12 @@
+# Python dependencies to run the pipeline. Install with:
+#   pip install -r requirements.txt
+#
+# This lists only what's needed to run the Snakefile and the two sources it
+# currently wires in (interpro, plantTFDB); the rest of riceKB/ has its own,
+# undeclared dependencies (pandas, numpy, rdflib at least, same as here) --
+# see each module's imports until this file covers the whole pipeline.
+snakemake>=9
+snakemake-executor-plugin-slurm>=1   # only needed to run on the cluster
+pandas
+numpy
+rdflib
