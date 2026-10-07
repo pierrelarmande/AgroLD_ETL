@@ -1,0 +1,16 @@
+# Configuration for the Snakemake pipeline.
+#
+# Paths to raw input files, per data source, and where the RDF they produce
+# is written. Each source's section lists exactly what its parser needs —
+# see the comment at the top of the matching riceKB/*.py module for the
+# expected file format.
+output_dir: "rdf_ttl"
+
+interpro:
+  tree_file: "data/interpro/ParentChildTreeFile.txt"
+  entry_list: "data/interpro/entry.list"
+  go_mapping: "data/interpro/interpro2go"
+
+planttfdb:
+  tf_list: "data/planttfdb/Mes_TF_list.txt"
+  regulation_file: "data/planttfdb/regulation_merged_Mes.txt"
