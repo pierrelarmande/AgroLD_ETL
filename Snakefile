@@ -17,16 +17,83 @@ default resources cover them; give a heavier future rule its own
 `resources:` block (e.g. a bigger mem_mb_per_cpu or a different
 slurm_partition) rather than raising that shared default.
 """
+import os
+from snakemake.exceptions import WorkflowError
+
 configfile: "config.yaml"
 
 OUTPUT_DIR = config["output_dir"]
 
 
+def load_agrold_taxon_ids():
+    """{production_name: taxon_id} for the species list ensembl_rdf and this
+    pipeline share (config.yaml's ensembl_rdf section) -- the single source
+    of truth for which species exist and what each one's NCBI taxon is, so
+    the two pipelines never disagree. species_agrold.yaml names the species;
+    species_EnsemblPlants_63.txt (tab-separated, #name/species/.../
+    taxonomy_id/...) is where the taxon id actually comes from.
+    """
+    import yaml
+
+    species_file = config["ensembl_rdf"]["species_file"]
+    species_table = config["ensembl_rdf"]["species_table"]
+    for path in (species_file, species_table):
+        if not os.path.exists(path):
+            raise WorkflowError(
+                f"ensembl_rdf config not found at {path} -- ensembl_rdf is "
+                "expected as a sibling checkout; edit config.yaml's "
+                "ensembl_rdf section if yours lives elsewhere.")
+
+    with open(species_file) as f:
+        wanted = set(yaml.safe_load(f)["species"])
+
+    taxon_id = {}
+    with open(species_table) as f:
+        next(f)  # header
+        for line in f:
+            fields = line.rstrip("\n").split("\t")
+            name = fields[1]
+            if name in wanted:
+                taxon_id[name] = fields[3]
+
+    missing = wanted - set(taxon_id)
+    if missing:
+        raise WorkflowError(
+            f"{species_table} has no taxon id for: {sorted(missing)}")
+    return taxon_id
+
+
+AGROLD_TAXON_ID = load_agrold_taxon_ids()
+
+
+def planttfdb_species():
+    """Species plantTFDB actually has input data for: one subdirectory per
+    species under planttfdb.data_dir, named by its ensembl_rdf production
+    name. A subdirectory for a species outside the AgroLD list is an error,
+    not a silent skip -- it is more likely a typo than an intentional extra
+    species the shared config doesn't know about yet.
+    """
+    data_dir = config["planttfdb"]["data_dir"]
+    if not os.path.isdir(data_dir):
+        return []
+    found = sorted(d for d in os.listdir(data_dir)
+                   if os.path.isdir(os.path.join(data_dir, d)))
+    unknown = [d for d in found if d not in AGROLD_TAXON_ID]
+    if unknown:
+        raise WorkflowError(
+            f"{data_dir} has data for species not in {config['ensembl_rdf']['species_file']}: "
+            f"{unknown}")
+    return found
+
+
+PLANTTFDB_SPECIES = planttfdb_species()
+
+
 rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
-        f"{OUTPUT_DIR}/planttfdb.ttl",
-        f"{OUTPUT_DIR}/planttfdb_regulation.ttl",
+        expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
+        expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
 
 
 rule interpro:
@@ -43,18 +110,25 @@ rule interpro:
 
 
 rule planttfdb:
-    """PlantTFDB gene families and the regulatory relations between them.
+    """PlantTFDB gene families and the regulatory relations between them, for
+    one species. The taxon id comes from the shared ensembl_rdf species
+    list (load_agrold_taxon_ids above), not from the input file, which
+    carries no species information of its own.
 
     One parser invocation writes both outputs; declaring them together as
     Snakemake output means a resume treats them as produced atomically (one
     missing file reruns the whole rule, not a partial one).
     """
     input:
-        tf_list=config["planttfdb"]["tf_list"],
-        regulation_file=config["planttfdb"]["regulation_file"],
+        tf_list=lambda wc: os.path.join(
+            config["planttfdb"]["data_dir"], wc.species, config["planttfdb"]["tf_list"]),
+        regulation_file=lambda wc: os.path.join(
+            config["planttfdb"]["data_dir"], wc.species, config["planttfdb"]["regulation_file"]),
     output:
-        tf=f"{OUTPUT_DIR}/planttfdb.ttl",
-        regulation=f"{OUTPUT_DIR}/planttfdb_regulation.ttl",
+        tf=f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl",
+        regulation=f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl",
+    params:
+        taxon_id=lambda wc: AGROLD_TAXON_ID[wc.species],
     shell:
         "python3 riceKB/plantTFDB.py {input.tf_list} {output.tf} "
-        "{input.regulation_file} {output.regulation}"
+        "{input.regulation_file} {output.regulation} --taxon-id {params.taxon_id}"

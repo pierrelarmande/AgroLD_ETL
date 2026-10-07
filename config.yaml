@@ -11,6 +11,19 @@ interpro:
   entry_list: "data/interpro/entry.list"
   go_mapping: "data/interpro/interpro2go"
 
+# The single source of truth for which species AgroLD covers and what each
+# one's NCBI taxon id is -- shared with ensembl_rdf, so the two pipelines
+# never disagree. Assumes ensembl_rdf is checked out as a sibling directory;
+# override these paths if yours lives elsewhere.
+ensembl_rdf:
+  species_file: "../ensembl_rdf/ensembl_rdf/config/species_agrold.yaml"
+  species_table: "../ensembl_rdf/ensembl_rdf/config/species_EnsemblPlants_63.txt"
+
 planttfdb:
-  tf_list: "data/planttfdb/Mes_TF_list.txt"
-  regulation_file: "data/planttfdb/regulation_merged_Mes.txt"
+  # One subdirectory per species, named by its ensembl_rdf production name
+  # (e.g. data/planttfdb/oryza_sativa/), each with these two files. Species
+  # with no subdirectory here are simply not processed; a subdirectory named
+  # for a species ensembl_rdf doesn't know is an error (see the Snakefile).
+  data_dir: "data/planttfdb"
+  tf_list: "Mes_TF_list.txt"
+  regulation_file: "regulation_merged_Mes.txt"

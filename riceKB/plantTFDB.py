@@ -35,14 +35,13 @@ def geneParser(infile):
     #array.dropna(subset=['locus_id'], inplace=True)
     return array
 
-def RDFConverter(ds, output_file):
+def RDFConverter(ds, output_file, taxon_id):
     os_japonica_buffer = ''  # initilised the buffer at zero
     line_number = 0
     rdf_writer = open(output_file, "w")
     gene_list = list()
     mRNA_list = list()
     fam_list = list()
-    taxon_id = "39947"
 
     print("************* RDF conversion begins***********\n")
     rdf_writer.write(str(getRDFHeaders()))
@@ -86,13 +85,14 @@ def RDFConverter(ds, output_file):
     print("*************** PlantTFDB RDF conversion completed ************\n")
 
 def RDFRegulate(ds, regulation_rdf):
+    # No taxon_id here: unlike RDFConverter, this function never emitted one
+    # (the identically-named local variable it used to declare was dead code).
     buffer = ''  # initilised the buffer at zero
     line_number = 0
     rdf_writer = open(regulation_rdf, "w")
     gene_list = list()
     mRNA_list = list()
     fam_list = list()
-    taxon_id = "39947"
 
     print("************* RDF conversion begins***********\n")
     rdf_writer.write(str(getRDFHeaders()))
@@ -111,10 +111,15 @@ def main():
     parser.add_argument("tf_output", help="output Turtle file for the gene family RDF")
     parser.add_argument("regulation_file", help="regulation file (e.g. regulation_merged_Mes.txt)")
     parser.add_argument("regulation_output", help="output Turtle file for the regulation RDF")
+    parser.add_argument("--taxon-id", required=True,
+                        help="NCBI taxon id of the species this data is for "
+                             "(e.g. 39947 for Oryza sativa Japonica) -- the "
+                             "input file carries no species information, so "
+                             "the caller must supply it")
     args = parser.parse_args()
 
     ds = geneParser(args.tf_list)
-    RDFConverter(ds, args.tf_output)
+    RDFConverter(ds, args.tf_output, args.taxon_id)
     ds2 = geneParser(args.regulation_file)
     RDFRegulate(ds2, args.regulation_output)
 
