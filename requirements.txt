@@ -10,3 +10,4 @@ snakemake-executor-plugin-slurm>=1   # only needed to run on the cluster
 pandas
 numpy
 rdflib
+pyyaml   # bin/download_planttfdb.py, and the Snakefile's species config

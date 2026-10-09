@@ -26,11 +26,14 @@ __author__  = "larmande"
 
 # TODO better Error handling
 # TODO modify the help
-def geneParser(infile):
+def geneParser(infile, header="infer"):
+    """header must be None for regulation_merged_*.txt -- unlike the TF list,
+    it has no header row, and its first row is real data that pandas would
+    otherwise silently swallow as column names."""
     #    pp = pprint.PrettyPrinter(indent=4)
     tigr = re.compile(tigr_pattern)
     rap = re.compile(rap_pattern)
-    array = pd.read_csv(infile, sep="\t", delimiter=None , dtype='str')
+    array = pd.read_csv(infile, sep="\t", delimiter=None , dtype='str', header=header)
     #array['locus_id'].replace('', np.nan, inplace=True)
     #array.dropna(subset=['locus_id'], inplace=True)
     return array
@@ -58,18 +61,18 @@ def RDFConverter(ds, output_file, taxon_id):
             buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Transcription_Factor" + " ;\n"
             buffer += "\t" + rdfs_ns + "label" + "\t" +  "\"" + records[2] +"\" ;\n"
             buffer += "\t" + dc_ns + "identifier" + "\t" +  "\"" + records[2] +"\" ;\n"
-            # predicate hasMember
-            buffer += "\t" + obo_ns + "RO_0002351" + "\t" + base_resource_ns + records[0] + " ;\n"
+            # predicate hasMember -- records[0] is the protein/translation id, records[1] the gene id
+            buffer += "\t" + obo_ns + "RO_0002351" + "\t" + ensembl_protein_ns + records[0] + " ;\n"
             buffer += "\t" + obo_ns + "RO_0002351" + "\t" + base_resource_ns + records[1] + " ;\n"
             buffer = re.sub(' ;$', ' .\n', buffer)
             fam_list.append(family_name)
         else:
             buffer += "<" + base_resource_uri + "family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
-                      base_resource_ns + records[0] + ".\n"
+                      ensembl_protein_ns + records[0] + ".\n"
             buffer += "<" + base_resource_uri + "family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
                       base_resource_ns + records[1] + " .\n"
                 # mRNA uri isMemberOf family uri
-        buffer += "<" + base_resource_uri + records[0] + ">"
+        buffer += "<" + ensembl_protein_uri + records[0] + ">"
         buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Transcription_Factor" + " ;\n"
         buffer += "\t" + obo_ns + "RO_0002350" + "\t" + "<" + base_resource_uri + "family/" + records[2] + ">" + " .\n"
         buffer += "<" + base_resource_uri + records[1] + ">"
@@ -120,7 +123,7 @@ def main():
 
     ds = geneParser(args.tf_list)
     RDFConverter(ds, args.tf_output, args.taxon_id)
-    ds2 = geneParser(args.regulation_file)
+    ds2 = geneParser(args.regulation_file, header=None)
     RDFRegulate(ds2, args.regulation_output)
 
 
