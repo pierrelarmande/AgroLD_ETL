@@ -8,9 +8,9 @@ internals. Paths come from config.yaml.
     snakemake --cores 1 -n                       # dry run
     snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
 
-Only interpro and plantTFDB are wired in so far (stringDB has no parser yet
-to call; uniprotToRDF is handled separately). Add a source by giving it its
-own `rule <name>:` below and listing it in `rule all`'s inputs.
+Only interpro, plantTFDB and stringDB are wired in so far (uniprotToRDF is
+handled separately). Add a source by giving it its own `rule <name>:` below
+and listing it in `rule all`'s inputs.
 
 Both current rules are light enough that profiles/slurm/config.yaml's
 default resources cover them; give a heavier future rule its own
@@ -89,11 +89,33 @@ def planttfdb_species():
 PLANTTFDB_SPECIES = planttfdb_species()
 
 
+def stringdb_species():
+    """Species StringDB actually has input data for: one subdirectory per
+    species under stringdb.data_dir, same convention and same unknown-
+    species error as planttfdb_species() above.
+    """
+    data_dir = config["stringdb"]["data_dir"]
+    if not os.path.isdir(data_dir):
+        return []
+    found = sorted(d for d in os.listdir(data_dir)
+                   if os.path.isdir(os.path.join(data_dir, d)))
+    unknown = [d for d in found if d not in AGROLD_TAXON_ID]
+    if unknown:
+        raise WorkflowError(
+            f"{data_dir} has data for species not in {config['ensembl_rdf']['species_file']}: "
+            f"{unknown}")
+    return found
+
+
+STRINGDB_SPECIES = stringdb_species()
+
+
 rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
+        expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
 
 
 rule interpro:
@@ -132,3 +154,27 @@ rule planttfdb:
     shell:
         "python3 riceKB/plantTFDB.py {input.tf_list} {output.tf} "
         "{input.regulation_file} {output.regulation} --taxon-id {params.taxon_id}"
+
+
+rule stringdb:
+    """STRING protein-protein association network for one species, with
+    STRING's own protein ids resolved to native gene locus ids via the
+    aliases file (see riceKB/stringDB.py). Output is large -- for
+    Arabidopsis thaliana alone the links file's ~15M rows produce a ~5GB
+    Turtle file -- so this rule may need its own heavier `resources:` for
+    bigger genomes, per the module docstring above.
+    """
+    input:
+        aliases_file=lambda wc: os.path.join(
+            config["stringdb"]["data_dir"], wc.species,
+            f"{AGROLD_TAXON_ID[wc.species]}.{config['stringdb']['aliases_suffix']}"),
+        links_file=lambda wc: os.path.join(
+            config["stringdb"]["data_dir"], wc.species,
+            f"{AGROLD_TAXON_ID[wc.species]}.{config['stringdb']['links_suffix']}"),
+    output:
+        f"{OUTPUT_DIR}/stringdb_{{species}}.ttl",
+    params:
+        taxon_id=lambda wc: AGROLD_TAXON_ID[wc.species],
+    shell:
+        "python3 riceKB/stringDB.py {input.aliases_file} {input.links_file} "
+        "{output} --taxon-id {params.taxon_id}"

@@ -27,3 +27,14 @@ planttfdb:
   data_dir: "data/planttfdb"
   tf_list: "Mes_TF_list.txt"
   regulation_file: "regulation_merged_Mes.txt"
+
+stringdb:
+  # One subdirectory per species, named by its ensembl_rdf production name
+  # (e.g. data/stringdb/arabidopsis_thaliana/), each with the two files
+  # STRING names by taxon id (e.g. 3702.protein.aliases.v12.5.txt,
+  # 3702.protein.links.v12.5.txt) -- downloaded by hand for now from
+  # https://string-db.org/cgi/download, no automated fetch script yet.
+  # Same unknown-subdirectory-is-an-error rule as planttfdb above.
+  data_dir: "data/stringdb"
+  aliases_suffix: "protein.aliases.v12.5.txt"
+  links_suffix: "protein.links.v12.5.txt"
