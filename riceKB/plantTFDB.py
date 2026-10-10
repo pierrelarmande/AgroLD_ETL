@@ -56,7 +56,7 @@ def RDFConverter(ds, output_file, taxon_id):
         buffer = ''
         if family_name not in fam_list:
             # buffer = ''
-            buffer += "<" + base_resource_uri + "family/" + records[2] + ">\n"
+            buffer += "<" + base_resource_uri + "gene_family/" + records[2] + ">\n"
             buffer += "\t" + obo_ns + "RO_0002162" + "\t\t" + obo_ns + taxon_id + " ;\n"
             buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Transcription_Factor" + " ;\n"
             buffer += "\t" + rdfs_ns + "label" + "\t" +  "\"" + records[2] +"\" ;\n"
@@ -67,17 +67,17 @@ def RDFConverter(ds, output_file, taxon_id):
             buffer = re.sub(' ;$', ' .\n', buffer)
             fam_list.append(family_name)
         else:
-            buffer += "<" + base_resource_uri + "family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
+            buffer += "<" + base_resource_uri + "gene_family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
                       ensembl_protein_ns + records[0] + ".\n"
-            buffer += "<" + base_resource_uri + "family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
+            buffer += "<" + base_resource_uri + "gene_family/" + records[2] + ">" + "\t" + obo_ns + "RO_0002351" + "\t" + \
                       base_resource_ns + records[1] + " .\n"
                 # mRNA uri isMemberOf family uri
         buffer += "<" + ensembl_protein_uri + records[0] + ">"
         buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Transcription_Factor" + " ;\n"
-        buffer += "\t" + obo_ns + "RO_0002350" + "\t" + "<" + base_resource_uri + "family/" + records[2] + ">" + " .\n"
+        buffer += "\t" + obo_ns + "RO_0002350" + "\t" + "<" + base_resource_uri + "gene_family/" + records[2] + ">" + " .\n"
         buffer += "<" + base_resource_uri + records[1] + ">"
         buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Transcription_Factor" + " ;\n"
-        buffer += "\t" + obo_ns + "RO_0002350" + "\t" + "<" + base_resource_uri + "family/" + records[2] + ">" + " .\n\n"
+        buffer += "\t" + obo_ns + "RO_0002350" + "\t" + "<" + base_resource_uri + "gene_family/" + records[2] + ">" + " .\n\n"
         # gene uri isMemberOf family uri > inference ?
 
         buffer = re.sub(' ;$', ' .\n', buffer)
