@@ -4,7 +4,13 @@
 # is written. Each source's section lists exactly what its parser needs —
 # see the comment at the top of the matching riceKB/*.py module for the
 # expected file format.
-output_dir: "rdf_ttl"
+#
+# output_dir is deliberately NOT rdf_ttl/ -- that directory is tracked in
+# git and holds small, hand-picked example outputs, not a real run's
+# output. A real run writes here instead; this directory is gitignored,
+# like data/, so on a cluster with limited home quota it can be symlinked
+# to shared project storage the same way.
+output_dir: "output"
 
 interpro:
   tree_file: "data/interpro/ParentChildTreeFile.txt"
