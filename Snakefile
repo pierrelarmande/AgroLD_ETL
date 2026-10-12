@@ -12,10 +12,16 @@ Only interpro, plantTFDB and stringDB are wired in so far (uniprotToRDF is
 handled separately). Add a source by giving it its own `rule <name>:` below
 and listing it in `rule all`'s inputs.
 
-Both current rules are light enough that profiles/slurm/config.yaml's
-default resources cover them; give a heavier future rule its own
-`resources:` block (e.g. a bigger mem_mb_per_cpu or a different
-slurm_partition) rather than raising that shared default.
+plantTFDB's and stringdb's raw input is fetched on demand (download_*
+rules) and deleted again as soon as it's converted (temp() outputs) --
+unlike interpro, which still expects data already placed under data_dir by
+hand. Run with `snakemake --keep-going` so a species one of these sources
+has no data for doesn't block the others.
+
+Most rules are light enough that profiles/slurm/config.yaml's default
+resources cover them; give a heavier future rule its own `resources:` block
+(e.g. a bigger mem_mb_per_cpu or a different slurm_partition) rather than
+raising that shared default.
 """
 import os
 from snakemake.exceptions import WorkflowError
@@ -66,48 +72,21 @@ def load_agrold_taxon_ids():
 AGROLD_TAXON_ID = load_agrold_taxon_ids()
 
 
-def planttfdb_species():
-    """Species plantTFDB actually has input data for: one subdirectory per
-    species under planttfdb.data_dir, named by its ensembl_rdf production
-    name. A subdirectory for a species outside the AgroLD list is an error,
-    not a silent skip -- it is more likely a typo than an intentional extra
-    species the shared config doesn't know about yet.
-    """
-    data_dir = config["planttfdb"]["data_dir"]
-    if not os.path.isdir(data_dir):
-        return []
-    found = sorted(d for d in os.listdir(data_dir)
-                   if os.path.isdir(os.path.join(data_dir, d)))
-    unknown = [d for d in found if d not in AGROLD_TAXON_ID]
-    if unknown:
-        raise WorkflowError(
-            f"{data_dir} has data for species not in {config['ensembl_rdf']['species_file']}: "
-            f"{unknown}")
-    return found
+# Like stringdb below, plantTFDB/PlantRegMap's raw input is downloaded on
+# demand by the download_planttfdb rule, so every AgroLD species is a
+# candidate; a species neither site covers simply fails its own
+# download_planttfdb job (see bin/download_planttfdb.py) -- run with
+# `snakemake --keep-going` so one such failure doesn't block the others.
+PLANTTFDB_SPECIES = sorted(AGROLD_TAXON_ID)
 
 
-PLANTTFDB_SPECIES = planttfdb_species()
-
-
-def stringdb_species():
-    """Species StringDB actually has input data for: one subdirectory per
-    species under stringdb.data_dir, same convention and same unknown-
-    species error as planttfdb_species() above.
-    """
-    data_dir = config["stringdb"]["data_dir"]
-    if not os.path.isdir(data_dir):
-        return []
-    found = sorted(d for d in os.listdir(data_dir)
-                   if os.path.isdir(os.path.join(data_dir, d)))
-    unknown = [d for d in found if d not in AGROLD_TAXON_ID]
-    if unknown:
-        raise WorkflowError(
-            f"{data_dir} has data for species not in {config['ensembl_rdf']['species_file']}: "
-            f"{unknown}")
-    return found
-
-
-STRINGDB_SPECIES = stringdb_species()
+# Unlike planttfdb (no fetch script wired in yet), stringdb's raw input is
+# downloaded on demand by the download_stringdb rule below, so there is no
+# pre-existing data_dir to scan: every AgroLD species is a candidate. A
+# species STRING has no data for simply fails its own download_stringdb job
+# (see bin/download_stringdb.py) -- run with `snakemake --keep-going` so one
+# such failure doesn't block the others.
+STRINGDB_SPECIES = sorted(AGROLD_TAXON_ID)
 
 
 rule all:
@@ -129,6 +108,31 @@ rule interpro:
     shell:
         "python3 riceKB/interpro.py {input.tree_file} {input.entry_list} "
         "{input.go_mapping} {output}"
+
+
+rule download_planttfdb:
+    """Fetch one species' PlantTFDB TF list + PlantRegMap merged regulation
+    network on demand, via bin/download_planttfdb.py. Declared temp() so
+    Snakemake deletes them as soon as the planttfdb rule below has consumed
+    them -- same reasoning as download_stringdb below: no permanent local
+    copy once converted.
+
+    Unlike download_stringdb, output filenames here don't embed a taxon id
+    (PlantTFDB/PlantRegMap files are always named the same within a species'
+    subdirectory), so {species} is the only wildcard needed and no
+    taxon-matching trick is required.
+    """
+    output:
+        tf_list=temp(os.path.join(
+            config["planttfdb"]["data_dir"], "{species}", config["planttfdb"]["tf_list"])),
+        regulation_file=temp(os.path.join(
+            config["planttfdb"]["data_dir"], "{species}", config["planttfdb"]["regulation_file"])),
+    shell:
+        "python3 bin/download_planttfdb.py -s {wildcards.species} "
+        "-o {config[planttfdb][data_dir]} "
+        "--tf-list-filename {config[planttfdb][tf_list]} "
+        "--regulation-filename {config[planttfdb][regulation_file]} "
+        "-f {config[ensembl_rdf][species_file]}"
 
 
 rule planttfdb:
@@ -154,6 +158,36 @@ rule planttfdb:
     shell:
         "python3 riceKB/plantTFDB.py {input.tf_list} {output.tf} "
         "{input.regulation_file} {output.regulation} --taxon-id {params.taxon_id}"
+
+
+rule download_stringdb:
+    """Fetch one species' STRING aliases + links files on demand, via
+    bin/download_stringdb.py. Declared temp() so Snakemake deletes them as
+    soon as the stringdb rule below has consumed them: STRING's raw,
+    unfiltered links file is several GB per species on disk, far more than
+    the filtered RDF it gets converted to, so there is no reason to keep a
+    permanent local copy per species once converted.
+
+    {taxon} is a free wildcard here (not looked up from AGROLD_TAXON_ID
+    directly, since output paths can't be computed by a function in
+    Snakemake) -- it gets bound by matching this rule's output pattern
+    against the concrete path the stringdb rule's input asks for, which
+    already embeds the right taxon id.
+    """
+    output:
+        aliases_file=temp(os.path.join(
+            config["stringdb"]["data_dir"], "{species}",
+            "{taxon}." + config["stringdb"]["aliases_suffix"])),
+        links_file=temp(os.path.join(
+            config["stringdb"]["data_dir"], "{species}",
+            "{taxon}." + config["stringdb"]["links_suffix"])),
+    wildcard_constraints:
+        taxon=r"\d+",
+    shell:
+        "python3 bin/download_stringdb.py -s {wildcards.species} "
+        "-o {config[stringdb][data_dir]} "
+        "-f {config[ensembl_rdf][species_file]} "
+        "-t {config[ensembl_rdf][species_table]}"
 
 
 rule stringdb:

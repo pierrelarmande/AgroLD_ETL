@@ -126,6 +126,13 @@ def main():
     if skipped:
         log(f'Skipped (no STRING v{args.version} entry for): {len(skipped)} species: {skipped}')
 
+    if not downloaded:
+        # Nothing succeeded -- in particular the case Snakemake's
+        # download_stringdb rule relies on, where -s names exactly one
+        # species: exit non-zero so a species with no STRING coverage shows
+        # up as a clear job failure instead of a silently-missing output file.
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

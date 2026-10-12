@@ -182,6 +182,14 @@ def main():
     if skipped:
         log(f'Skipped (no PlantTFDB/PlantRegMap entry for): {len(skipped)} species: {skipped}')
 
+    if not downloaded:
+        # Nothing succeeded -- in particular the case Snakemake's
+        # download_planttfdb rule relies on, where -s names exactly one
+        # species: exit non-zero so a species with no PlantTFDB/PlantRegMap
+        # coverage shows up as a clear job failure instead of a silently-
+        # missing output file.
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
