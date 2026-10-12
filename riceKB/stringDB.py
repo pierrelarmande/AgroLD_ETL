@@ -97,10 +97,12 @@ def RDFConverter(links_file, gene_by_protein, taxon_id, output_file, min_score):
             association = base_resource_uri + "association/string/" + gene1 + "_" + gene2 + "_" + score
             buffer = ''
             buffer += "<" + base_resource_uri + gene1 + ">"
-            buffer += "\t" + obo_ns + "RO_0002328" + "\t\t" + "<" + association + "> .\n\n"
+            buffer += "\t" + obo_ns + "RO_0002461" + "\t\t" + "<" + association + "> .\n\n"
             buffer += "<" + association + ">\n"
-            buffer += "\t" + base_vocab_ns + "associationValue" + "\t" + "\"" + score + "\"^^xsd:integer ;\n"
-            buffer += "\t" + base_vocab_ns + "associationTarget" + "\t" + "<" + base_resource_uri + gene2 + "> .\n\n"
+            buffer += "\t" + rdf_ns + "value" + "\t" + "\"" + score + "\"^^xsd:integer ;\n"
+            buffer += "\t" + obo_ns + "RO_0002462" + "\t" + "<" + string_uri + protein1 + "> ;\n"
+            buffer += "\t" + obo_ns + "RO_0002463" + "\t" + "<" + string_uri + protein2 + "> ;\n"
+            buffer += "\t" + obo_ns + "RO_0002436" + "\t" + "<" + base_resource_uri + gene2 + "> .\n\n"
             rdf_writer.write(buffer)
             resolved += 1
 
