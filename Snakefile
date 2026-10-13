@@ -28,6 +28,13 @@ from snakemake.exceptions import WorkflowError
 
 configfile: "config.yaml"
 
+# riceKB/*.py scripts do `from riceKB.globalVars import *`, which needs the
+# repo root (not riceKB/ itself, the directory `python3 riceKB/x.py` puts on
+# sys.path[0] by default) on PYTHONPATH. Don't rely on the submitting
+# shell's own PYTHONPATH already having it (it won't, e.g. on a cluster
+# compute node) -- set it explicitly for every rule's shell command instead.
+shell.prefix(f'export PYTHONPATH="{workflow.basedir}:$PYTHONPATH"; ')
+
 OUTPUT_DIR = config["output_dir"]
 
 
