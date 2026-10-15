@@ -8,15 +8,15 @@ internals. Paths come from config.yaml.
     snakemake --cores 1 -n                       # dry run
     snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
 
-Only interpro, plantTFDB and stringDB are wired in so far (uniprotToRDF is
-handled separately). Add a source by giving it its own `rule <name>:` below
-and listing it in `rule all`'s inputs.
+interpro, plantTFDB, stringDB and uniprotToRDF are wired in so far. Add a
+source by giving it its own `rule <name>:` below and listing it in `rule
+all`'s inputs.
 
-plantTFDB's and stringdb's raw input is fetched on demand (download_*
-rules) and deleted again as soon as it's converted (temp() outputs) --
-unlike interpro, which still expects data already placed under data_dir by
-hand. Run with `snakemake --keep-going` so a species one of these sources
-has no data for doesn't block the others.
+plantTFDB's, stringdb's and uniprot's raw input is fetched on demand
+(download_* rules) and deleted again as soon as it's converted (temp()
+outputs) -- unlike interpro, which still expects data already placed under
+data_dir by hand. Run with `snakemake --keep-going` so a species one of
+these sources has no data for doesn't block the others.
 
 Most rules are light enough that profiles/slurm/config.yaml's default
 resources cover them; give a heavier future rule its own `resources:` block
@@ -96,12 +96,27 @@ PLANTTFDB_SPECIES = sorted(AGROLD_TAXON_ID)
 STRINGDB_SPECIES = sorted(AGROLD_TAXON_ID)
 
 
+# UniProt publishes ONE flat-file per taxonomic division (e.g. "plants"),
+# covering every species in it -- unlike planttfdb/stringdb above, there is
+# no per-species variant to fetch, so this is keyed by taxon id rather than
+# species name: riceKB/uniprotToRDF.py itself filters the species it wants
+# out of the shared file (see download_uniprot/uniprot rules below). Only
+# Swiss-Prot (reviewed) is wired in for now; TrEMBL would need its own
+# UNIPROT_BANK value and a much bigger per-division file.
+UNIPROT_BANK = "sprot"
+UNIPROT_TAXA = sorted(set(AGROLD_TAXON_ID.values()))
+
+
 rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.plants.ttl", taxon=UNIPROT_TAXA),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.keyword.ttl", taxon=UNIPROT_TAXA),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.pubmed.ttl", taxon=UNIPROT_TAXA),
+        expand(f"{OUTPUT_DIR}/mappings_{{taxon}}_{UNIPROT_BANK}_gene_prot.tsv", taxon=UNIPROT_TAXA),
 
 
 rule interpro:
@@ -219,3 +234,50 @@ rule stringdb:
     shell:
         "python3 riceKB/stringDB.py {input.aliases_file} {input.links_file} "
         "{output} --taxon-id {params.taxon_id}"
+
+
+rule download_uniprot:
+    """Fetch the shared UniProt Swiss-Prot "plants" taxonomic division
+    flat-file once, via bin/download_uniprot.py -- not per species, unlike
+    stringdb/planttfdb above: UniProt publishes ONE file per division,
+    covering every species in it, and riceKB/uniprotToRDF.py filters the
+    species it wants out of this shared file itself (see the uniprot rule
+    below). Declared temp() so Snakemake deletes it once every uniprot job
+    across every taxon has consumed it; at ~350MB decompressed for
+    Swiss-Prot plants, this is far smaller than STRING's per-species files,
+    so there's no need to split it up further.
+    """
+    output:
+        temp(os.path.join(config["uniprot"]["data_dir"], f"uniprot_{UNIPROT_BANK}_plants.dat")),
+    shell:
+        "python3 bin/download_uniprot.py --bank " + UNIPROT_BANK + " --division plants "
+        "-o {config[uniprot][data_dir]}"
+
+
+rule uniprot:
+    """UniProt Swiss-Prot protein records -- plus the keywords and PubMed
+    citations they reference -- for one taxon, filtered out of the shared
+    plants division dump by riceKB/uniprotToRDF.py itself.
+
+    {taxon} is a free wildcard here (not looked up via AGROLD_TAXON_ID,
+    since output paths can't be computed by a function in Snakemake); it's
+    rule all's expand() over AGROLD_TAXON_ID's values (UNIPROT_TAXA above)
+    that actually drives which taxa get requested. A taxon with no
+    Swiss-Prot entry in the plants division still "succeeds" with
+    near-empty (header-only) output files -- riceKB/uniprotToRDF.py has no
+    equivalent of stringdb/planttfdb's explicit exit-non-zero-on-no-match.
+    """
+    input:
+        os.path.join(config["uniprot"]["data_dir"], f"uniprot_{UNIPROT_BANK}_plants.dat"),
+    output:
+        protein=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.plants.ttl",
+        keyword=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.keyword.ttl",
+        pubmed=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.pubmed.ttl",
+        gene_mapping=f"{OUTPUT_DIR}/mappings_{{taxon}}_{UNIPROT_BANK}_gene_prot.tsv",
+    wildcard_constraints:
+        taxon=r"\d+",
+    params:
+        output_dir=OUTPUT_DIR,
+    shell:
+        "python3 riceKB/uniprotToRDF.py " + UNIPROT_BANK + " {wildcards.taxon} "
+        "{params.output_dir} {input}"
