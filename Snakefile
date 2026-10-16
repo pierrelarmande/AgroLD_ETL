@@ -263,9 +263,9 @@ rule uniprot:
     since output paths can't be computed by a function in Snakemake); it's
     rule all's expand() over AGROLD_TAXON_ID's values (UNIPROT_TAXA above)
     that actually drives which taxa get requested. A taxon with no
-    Swiss-Prot entry in the plants division still "succeeds" with
-    near-empty (header-only) output files -- riceKB/uniprotToRDF.py has no
-    equivalent of stringdb/planttfdb's explicit exit-non-zero-on-no-match.
+    Swiss-Prot entry in the plants division fails this job (see
+    riceKB/uniprotToRDF.py's exit(1) on zero matches) -- run with
+    `snakemake --keep-going` so that doesn't block the other taxa.
     """
     input:
         os.path.join(config["uniprot"]["data_dir"], f"uniprot_{UNIPROT_BANK}_plants.dat"),

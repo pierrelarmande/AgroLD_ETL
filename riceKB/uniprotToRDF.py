@@ -469,6 +469,14 @@ def upToRDF(up_files, rdf_out_dir,taxon_id,bank_name):  # , output_file
     pubmed_writer.close()
     print("Number of Proteins: %s\n" % (str(prot_counter)))
     print("*************** UniProt RDF conversion completed ************\n")
+    if prot_counter == 0:
+        # Nothing matched taxon_id -- in particular the case Snakemake's
+        # uniprot rule relies on, where up_files holds many species: exit
+        # non-zero so a species with no Swiss-Prot entry in this division
+        # shows up as a clear job failure instead of silently-near-empty
+        # (header-only) output files, matching download_stringdb.py /
+        # download_planttfdb.py's convention.
+        sys.exit(1)
 
 
 #                   pp.pprint(record.cross_references) #taxonomy_id cross_references comments description keywords gene_name molecule_type
