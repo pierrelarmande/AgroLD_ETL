@@ -1,7 +1,5 @@
 import argparse
 import datetime
-import gzip
-import io
 import os
 import sys
 from urllib.request import Request, urlopen
@@ -13,24 +11,26 @@ UNIPROT_FTP_BASE = (
     "knowledgebase/taxonomic_divisions/")
 
 
+CHUNK_SIZE = 1024 * 1024  # 1MB -- keeps memory use flat regardless of file size
+
+
 def log(msg):
     print(f'[{datetime.datetime.now()}] {msg}', file=sys.stderr)
 
 
-def fetch(url):
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urlopen(req) as res:
-        return res.read()
-
-
-def download_gzipped(url, dest):
+def download(url, dest):
+    """Stream url straight to dest, still gzip-compressed -- riceKB/
+    uniprotToRDF.py decompresses on the fly as it reads, so there is no
+    need (and, for uniprot_trembl_plants.dat.gz's ~14GB, no room) to ever
+    hold the whole response or the decompressed content in memory or on
+    disk at once.
+    """
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     log(f'Downloading {url}')
-    data = fetch(url)
-    with gzip.GzipFile(fileobj=io.BytesIO(data)) as gz:
-        data = gz.read()
-    with open(dest + ".part", "wb") as f:
-        f.write(data)
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(req) as res, open(dest + ".part", "wb") as f:
+        while chunk := res.read(CHUNK_SIZE):
+            f.write(chunk)
     os.replace(dest + ".part", dest)
     log(f'Wrote {dest}')
 
@@ -54,14 +54,14 @@ def main():
                         help="UniProt taxonomic division name, as used in "
                              "the UniProt FTP filenames (default: plants)")
     parser.add_argument("-o", "--output-dir", default="data/uniprot",
-                        help="directory to write the decompressed .dat file "
-                             "into (default: data/uniprot)")
+                        help="directory to write the still-gzipped .dat.gz "
+                             "file into (default: data/uniprot)")
     args = parser.parse_args()
 
-    filename = f"uniprot_{args.bank}_{args.division}.dat"
-    url = UNIPROT_FTP_BASE + filename + ".gz"
+    filename = f"uniprot_{args.bank}_{args.division}.dat.gz"
+    url = UNIPROT_FTP_BASE + filename
     dest = os.path.join(args.output_dir, filename)
-    download_gzipped(url, dest)
+    download(url, dest)
 
 
 if __name__ == "__main__":

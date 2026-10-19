@@ -48,9 +48,11 @@ stringdb:
   links_suffix: "protein.links.v12.5.txt"
 
 uniprot:
-  # One shared flat-file for the whole "plants" taxonomic division (not
-  # per-species: UniProt publishes one file per division, covering every
-  # species in it). Fetched automatically on demand by the Snakefile's
-  # download_uniprot rule (via bin/download_uniprot.py) and deleted again
-  # once every species' conversion job has used it.
+  # One shared flat-file per bank (sprot, trembl) for the whole "plants"
+  # taxonomic division (not per-species: UniProt publishes one file per
+  # division, covering every species in it). Fetched automatically on
+  # demand by the Snakefile's download_uniprot rule (via
+  # bin/download_uniprot.py), kept gzip-compressed on disk (trembl's is
+  # ~14GB compressed), and deleted again once every species' conversion
+  # job for that bank has used it.
   data_dir: "data/uniprot"

@@ -10,6 +10,7 @@ from Bio import SwissProt
 from globalVars import *
 #from globalVars import *
 from utils import *
+import gzip
 import pprint
 import re
 import os
@@ -280,7 +281,12 @@ def upToRDF(up_files, rdf_out_dir,taxon_id,bank_name):  # , output_file
     output_writer.write(str(getRDFHeaders()))
 #    for upfile in up_files:
 #        file_handle = open(upfile, "r")
-    with open(up_files, 'r') as file_handle:
+    # up_files is now kept gzip-compressed on disk (the plants/trembl
+    # divisions are too big to decompress to a second on-disk copy, and
+    # SwissProt.parse() below reads it incrementally anyway, so streaming
+    # decompression costs no extra memory over reading it uncompressed).
+    opener = gzip.open if up_files.endswith('.gz') else open
+    with opener(up_files, 'rt') as file_handle:
         #up_records = SwissProt.parse(file_handle)
 
         #        xrefs = defaultdict(list)

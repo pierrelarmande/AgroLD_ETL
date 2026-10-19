@@ -100,10 +100,13 @@ STRINGDB_SPECIES = sorted(AGROLD_TAXON_ID)
 # covering every species in it -- unlike planttfdb/stringdb above, there is
 # no per-species variant to fetch, so this is keyed by taxon id rather than
 # species name: riceKB/uniprotToRDF.py itself filters the species it wants
-# out of the shared file (see download_uniprot/uniprot rules below). Only
-# Swiss-Prot (reviewed) is wired in for now; TrEMBL would need its own
-# UNIPROT_BANK value and a much bigger per-division file.
-UNIPROT_BANK = "sprot"
+# out of the shared file (see download_uniprot/uniprot rules below).
+# uniprot_trembl_plants.dat.gz is ~14GB -- both banks stay gzip-compressed
+# on disk (download_uniprot doesn't decompress them, and uniprotToRDF.py
+# streams/decompresses on the fly), so there's no decompressed copy eating
+# scratch space, at the cost of re-decompressing the file in every one of
+# UNIPROT_TAXA's jobs rather than once.
+UNIPROT_BANKS = ["sprot", "trembl"]
 UNIPROT_TAXA = sorted(set(AGROLD_TAXON_ID.values()))
 
 
@@ -113,10 +116,10 @@ rule all:
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
-        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.plants.ttl", taxon=UNIPROT_TAXA),
-        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.keyword.ttl", taxon=UNIPROT_TAXA),
-        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.pubmed.ttl", taxon=UNIPROT_TAXA),
-        expand(f"{OUTPUT_DIR}/mappings_{{taxon}}_{UNIPROT_BANK}_gene_prot.tsv", taxon=UNIPROT_TAXA),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/mappings_{{taxon}}_{{bank}}_gene_prot.tsv", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
 
 
 rule interpro:
@@ -237,47 +240,53 @@ rule stringdb:
 
 
 rule download_uniprot:
-    """Fetch the shared UniProt Swiss-Prot "plants" taxonomic division
-    flat-file once, via bin/download_uniprot.py -- not per species, unlike
-    stringdb/planttfdb above: UniProt publishes ONE file per division,
-    covering every species in it, and riceKB/uniprotToRDF.py filters the
-    species it wants out of this shared file itself (see the uniprot rule
-    below). Declared temp() so Snakemake deletes it once every uniprot job
-    across every taxon has consumed it; at ~350MB decompressed for
-    Swiss-Prot plants, this is far smaller than STRING's per-species files,
-    so there's no need to split it up further.
+    """Fetch one shared UniProt taxonomic division flat-file (one per bank:
+    sprot or trembl), still gzip-compressed, via bin/download_uniprot.py --
+    not per species, unlike stringdb/planttfdb above: UniProt publishes ONE
+    file per division, covering every species in it, and
+    riceKB/uniprotToRDF.py filters the species it wants out of this shared
+    file itself (see the uniprot rule below). Kept gzip-compressed on disk
+    (not decompressed here) because uniprot_trembl_plants.dat.gz is ~14GB
+    compressed -- decompressing it to a second on-disk copy isn't viable on
+    a quota-limited cluster; riceKB/uniprotToRDF.py decompresses on the fly
+    as it reads instead. Declared temp() so Snakemake deletes it once every
+    uniprot job for this bank, across every taxon, has consumed it.
     """
     output:
-        temp(os.path.join(config["uniprot"]["data_dir"], f"uniprot_{UNIPROT_BANK}_plants.dat")),
+        temp(os.path.join(config["uniprot"]["data_dir"], "uniprot_{bank}_plants.dat.gz")),
+    wildcard_constraints:
+        bank=r"sprot|trembl",
     shell:
-        "python3 bin/download_uniprot.py --bank " + UNIPROT_BANK + " --division plants "
+        "python3 bin/download_uniprot.py --bank {wildcards.bank} --division plants "
         "-o {config[uniprot][data_dir]}"
 
 
 rule uniprot:
-    """UniProt Swiss-Prot protein records -- plus the keywords and PubMed
-    citations they reference -- for one taxon, filtered out of the shared
-    plants division dump by riceKB/uniprotToRDF.py itself.
+    """UniProt protein records -- plus the keywords and PubMed citations
+    they reference -- for one taxon and one bank (sprot or trembl),
+    filtered out of the shared, still-gzipped plants division dump by
+    riceKB/uniprotToRDF.py itself.
 
     {taxon} is a free wildcard here (not looked up via AGROLD_TAXON_ID,
     since output paths can't be computed by a function in Snakemake); it's
     rule all's expand() over AGROLD_TAXON_ID's values (UNIPROT_TAXA above)
-    that actually drives which taxa get requested. A taxon with no
-    Swiss-Prot entry in the plants division fails this job (see
+    that actually drives which taxa get requested. A taxon with no entry
+    for this bank in the plants division fails this job (see
     riceKB/uniprotToRDF.py's exit(1) on zero matches) -- run with
-    `snakemake --keep-going` so that doesn't block the other taxa.
+    `snakemake --keep-going` so that doesn't block the other taxa/banks.
     """
     input:
-        os.path.join(config["uniprot"]["data_dir"], f"uniprot_{UNIPROT_BANK}_plants.dat"),
+        os.path.join(config["uniprot"]["data_dir"], "uniprot_{bank}_plants.dat.gz"),
     output:
-        protein=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.plants.ttl",
-        keyword=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.keyword.ttl",
-        pubmed=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{UNIPROT_BANK}.pubmed.ttl",
-        gene_mapping=f"{OUTPUT_DIR}/mappings_{{taxon}}_{UNIPROT_BANK}_gene_prot.tsv",
+        protein=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.ttl",
+        keyword=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.ttl",
+        pubmed=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.ttl",
+        gene_mapping=f"{OUTPUT_DIR}/mappings_{{taxon}}_{{bank}}_gene_prot.tsv",
     wildcard_constraints:
         taxon=r"\d+",
+        bank=r"sprot|trembl",
     params:
         output_dir=OUTPUT_DIR,
     shell:
-        "python3 riceKB/uniprotToRDF.py " + UNIPROT_BANK + " {wildcards.taxon} "
+        "python3 riceKB/uniprotToRDF.py {wildcards.bank} {wildcards.taxon} "
         "{params.output_dir} {input}"
