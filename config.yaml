@@ -17,6 +17,14 @@ interpro:
   entry_list: "data/interpro/entry.list"
   go_mapping: "data/interpro/interpro2go"
 
+oryzabase:
+  # OryzaBase's gene list is exported on demand via a web form
+  # (https://shigen.nig.ac.jp/rice/oryzabase/gene/download), with a
+  # timestamp baked into the downloaded filename -- no stable URL to fetch
+  # automatically, so like interpro above, rename or symlink the download
+  # to this fixed path by hand.
+  gene_list: "data/oryzabase/OryzabaseGeneListEn.txt"
+
 # The single source of truth for which species AgroLD covers and what each
 # one's NCBI taxon id is -- shared with ensembl_rdf, so the two pipelines
 # never disagree. Assumes ensembl_rdf is checked out as a sibling directory;

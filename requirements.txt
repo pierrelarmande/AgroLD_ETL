@@ -2,13 +2,13 @@
 #   pip install -r requirements.txt
 #
 # This lists only what's needed to run the Snakefile and the sources it
-# currently wires in (interpro, plantTFDB, stringDB, uniprotToRDF); the rest
-# of riceKB/ has its own, undeclared dependencies -- see each module's
-# imports until this file covers the whole pipeline.
+# currently wires in (interpro, oryzaBaseParser, plantTFDB, stringDB,
+# uniprotToRDF); the rest of riceKB/ has its own, undeclared dependencies --
+# see each module's imports until this file covers the whole pipeline.
 snakemake>=9
 snakemake-executor-plugin-slurm>=1   # only needed to run on the cluster
-pandas
-numpy
+pandas   # riceKB/oryzaBaseParser.py
+numpy   # riceKB/interpro.py, riceKB/plantTFDB.py
 rdflib
 pyyaml   # bin/download_planttfdb.py, and the Snakefile's species config
 biopython   # riceKB/uniprotToRDF.py (Bio.SwissProt)

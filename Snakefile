@@ -8,9 +8,9 @@ internals. Paths come from config.yaml.
     snakemake --cores 1 -n                       # dry run
     snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
 
-interpro, plantTFDB, stringDB and uniprotToRDF are wired in so far. Add a
-source by giving it its own `rule <name>:` below and listing it in `rule
-all`'s inputs.
+interpro, oryzaBaseParser, plantTFDB, stringDB and uniprotToRDF are wired in
+so far. Add a source by giving it its own `rule <name>:` below and listing
+it in `rule all`'s inputs.
 
 plantTFDB's, stringdb's and uniprot's raw input is fetched on demand
 (download_* rules) and deleted again as soon as it's converted (temp()
@@ -113,6 +113,7 @@ UNIPROT_TAXA = sorted(set(AGROLD_TAXON_ID.values()))
 rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
+        f"{OUTPUT_DIR}/oryzabase_genes.ttl",
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
@@ -133,6 +134,35 @@ rule interpro:
     shell:
         "python3 riceKB/interpro.py {input.tree_file} {input.entry_list} "
         "{input.go_mapping} {output}"
+
+
+rule oryzabase:
+    """OryzaBase gene list -- names, symbols, RAP-DB/MSU/Gramene cross-refs,
+    GO/TO/PO classifications -- plus the side mapping files other
+    AgroLD_ETL parsers (see riceKB/rapdbModel.py) join against.
+
+    OryzaBase's gene list is exported on demand via a web form
+    (https://shigen.nig.ac.jp/rice/oryzabase/gene/download), with a
+    timestamp baked into the downloaded filename -- no stable URL to fetch
+    automatically, so like interpro above, it's placed by hand under
+    data_dir (rename or symlink the download to the path config.yaml
+    expects).
+    """
+    input:
+        config["oryzabase"]["gene_list"],
+    output:
+        genes=f"{OUTPUT_DIR}/oryzabase_genes.ttl",
+        pub_dict=f"{OUTPUT_DIR}/pub_dictionnary.txt",
+        pub_dict_rapdb=f"{OUTPUT_DIR}/pub_dictionnary_rapdb.txt",
+        pub_dict_msu=f"{OUTPUT_DIR}/pub_dictionnary_msu.txt",
+        pub_dict_hub=f"{OUTPUT_DIR}/pub_genome_hub.txt",
+        dict_po=f"{OUTPUT_DIR}/dict_PO_hub.txt",
+        dict_to=f"{OUTPUT_DIR}/dict_TO_hub.txt",
+    shell:
+        "python3 riceKB/oryzaBaseParser.py {input} {output.genes} "
+        "--pub-dict {output.pub_dict} --pub-dict-rapdb {output.pub_dict_rapdb} "
+        "--pub-dict-msu {output.pub_dict_msu} --pub-dict-hub {output.pub_dict_hub} "
+        "--dict-po {output.dict_po} --dict-to {output.dict_to}"
 
 
 rule download_planttfdb:
