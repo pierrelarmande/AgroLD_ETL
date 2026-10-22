@@ -22,6 +22,15 @@ Most rules are light enough that profiles/slurm/config.yaml's default
 resources cover them; give a heavier future rule its own `resources:` block
 (e.g. a bigger mem_mb_per_cpu or a different slurm_partition) rather than
 raising that shared default.
+
+Every source's Turtle output is validated with rapper before rule all ever
+sees it, via the generic validate_turtle rule below -- a rule that produces
+Turtle names its own output *.raw.ttl (wrapped in temp(), since
+validate_turtle is its only consumer) instead of *.ttl, and validate_turtle
+turns it into the final *.ttl by the naming convention alone, no per-rule
+wiring needed. Catches malformed syntax from a parser bug (escaping,
+encoding, ...) in one pass over the whole finished file, the same mechanism
+ensembl_rdf's bin/rapper_postprocess.sh uses.
 """
 import os
 from snakemake.exceptions import WorkflowError
@@ -123,6 +132,40 @@ rule all:
         expand(f"{OUTPUT_DIR}/mappings_{{taxon}}_{{bank}}_gene_prot.tsv", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
 
 
+rule validate_turtle:
+    """Validate and normalize a pipeline's raw Turtle output with rapper --
+    the same mechanism ensembl_rdf's bin/rapper_postprocess.sh uses, applied
+    here as one generic rule instead of a per-source step. {name} is a free
+    wildcard (can contain dots, e.g. "uniprot_4530_trembl.plants") matched
+    against whatever *.raw.ttl a producing rule's output already names.
+
+    rapper's own exit code is 1 on a genuine syntax error (verified against
+    a deliberately malformed file), so Snakemake's normal "remove a failed
+    job's declared outputs" behaviour already keeps a bad {output} from
+    lingering. {output}.rapper.log is kept only when something failed, for
+    debugging -- on success its content is already visible in Snakemake's
+    own job log via the cat below, so it's removed rather than left as
+    permanent clutter next to every one of the pipeline's Turtle files.
+    """
+    input:
+        f"{OUTPUT_DIR}/{{name}}.raw.ttl",
+    output:
+        f"{OUTPUT_DIR}/{{name}}.ttl",
+    wildcard_constraints:
+        # Without this, {name} is free to end in ".raw" itself, so Snakemake
+        # considers applying this very rule to its own output recursively
+        # (name="X.raw" producing "X.raw.ttl" as an input to name="X.raw.raw"
+        # producing "X.raw.raw.ttl", ...) -- confirmed: Snakemake rejects the
+        # DAG with a PeriodicWildcardError/AmbiguousRuleException without
+        # this constraint.
+        name=r".+(?<!\.raw)",
+    shell:
+        "rapper -i turtle -o turtle {input} > {output} 2> {output}.rapper.log; "
+        "status=$?; cat {output}.rapper.log >&2; "
+        "if [ $status -eq 0 ]; then rm -f {output}.rapper.log; fi; "
+        "exit $status"
+
+
 rule interpro:
     """InterPro domain hierarchy, labels and GO mapping."""
     input:
@@ -130,7 +173,7 @@ rule interpro:
         entry_list=config["interpro"]["entry_list"],
         go_mapping=config["interpro"]["go_mapping"],
     output:
-        f"{OUTPUT_DIR}/interpro.ttl",
+        temp(f"{OUTPUT_DIR}/interpro.raw.ttl"),
     shell:
         "python3 riceKB/interpro.py {input.tree_file} {input.entry_list} "
         "{input.go_mapping} {output}"
@@ -151,7 +194,7 @@ rule oryzabase:
     input:
         config["oryzabase"]["gene_list"],
     output:
-        genes=f"{OUTPUT_DIR}/oryzabase_genes.ttl",
+        genes=temp(f"{OUTPUT_DIR}/oryzabase_genes.raw.ttl"),
         pub_dict=f"{OUTPUT_DIR}/pub_dictionnary.txt",
         pub_dict_rapdb=f"{OUTPUT_DIR}/pub_dictionnary_rapdb.txt",
         pub_dict_msu=f"{OUTPUT_DIR}/pub_dictionnary_msu.txt",
@@ -206,8 +249,8 @@ rule planttfdb:
         regulation_file=lambda wc: os.path.join(
             config["planttfdb"]["data_dir"], wc.species, config["planttfdb"]["regulation_file"]),
     output:
-        tf=f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl",
-        regulation=f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl",
+        tf=temp(f"{OUTPUT_DIR}/planttfdb_{{species}}.raw.ttl"),
+        regulation=temp(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.raw.ttl"),
     params:
         taxon_id=lambda wc: AGROLD_TAXON_ID[wc.species],
     shell:
@@ -261,7 +304,7 @@ rule stringdb:
             config["stringdb"]["data_dir"], wc.species,
             f"{AGROLD_TAXON_ID[wc.species]}.{config['stringdb']['links_suffix']}"),
     output:
-        f"{OUTPUT_DIR}/stringdb_{{species}}.ttl",
+        temp(f"{OUTPUT_DIR}/stringdb_{{species}}.raw.ttl"),
     params:
         taxon_id=lambda wc: AGROLD_TAXON_ID[wc.species],
     shell:
@@ -304,13 +347,21 @@ rule uniprot:
     for this bank in the plants division fails this job (see
     riceKB/uniprotToRDF.py's exit(1) on zero matches) -- run with
     `snakemake --keep-going` so that doesn't block the other taxa/banks.
+
+    riceKB/uniprotToRDF.py builds its own output filenames internally from
+    bank/taxon (uniprot_{taxon}_{bank}.plants.ttl etc. -- its CLI doesn't
+    take explicit output paths, deliberately left unchanged), so unlike the
+    other sources this rule can't just rename its own `output:` to
+    *.raw.ttl and let the script write there directly; it renames the
+    script's fixed-name files to *.raw.ttl itself afterwards instead, so
+    validate_turtle still picks them up the same way as everywhere else.
     """
     input:
         os.path.join(config["uniprot"]["data_dir"], "uniprot_{bank}_plants.dat.gz"),
     output:
-        protein=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.ttl",
-        keyword=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.ttl",
-        pubmed=f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.ttl",
+        protein=temp(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.raw.ttl"),
+        keyword=temp(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.raw.ttl"),
+        pubmed=temp(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.raw.ttl"),
         gene_mapping=f"{OUTPUT_DIR}/mappings_{{taxon}}_{{bank}}_gene_prot.tsv",
     wildcard_constraints:
         taxon=r"\d+",
@@ -319,4 +370,7 @@ rule uniprot:
         output_dir=OUTPUT_DIR,
     shell:
         "python3 riceKB/uniprotToRDF.py {wildcards.bank} {wildcards.taxon} "
-        "{params.output_dir} {input}"
+        "{params.output_dir} {input} && "
+        "mv {params.output_dir}/uniprot_{wildcards.taxon}_{wildcards.bank}.plants.ttl {output.protein} && "
+        "mv {params.output_dir}/uniprot_{wildcards.taxon}_{wildcards.bank}.keyword.ttl {output.keyword} && "
+        "mv {params.output_dir}/uniprot_{wildcards.taxon}_{wildcards.bank}.pubmed.ttl {output.pubmed}"
