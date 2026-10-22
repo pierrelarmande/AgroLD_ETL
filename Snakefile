@@ -30,7 +30,11 @@ validate_turtle is its only consumer) instead of *.ttl, and validate_turtle
 turns it into the final *.ttl by the naming convention alone, no per-rule
 wiring needed. Catches malformed syntax from a parser bug (escaping,
 encoding, ...) in one pass over the whole finished file, the same mechanism
-ensembl_rdf's bin/rapper_postprocess.sh uses.
+ensembl_rdf's bin/rapper_postprocess.sh uses. This makes `rapper` (raptor2)
+a hard dependency of every rule's output, not just an optional checker --
+on the cluster, make sure it's on PATH (e.g. `module load bioinfo-itrop
+raptor2/2.0.16`, same module ensembl_rdf uses) before running this, or
+every validate_turtle job fails with "command not found".
 """
 import os
 from snakemake.exceptions import WorkflowError
