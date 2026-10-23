@@ -32,10 +32,12 @@ turns it into the final *.ttl by the naming convention alone, no per-rule
 wiring needed. Catches malformed syntax from a parser bug (escaping,
 encoding, ...) in one pass over the whole finished file, the same mechanism
 ensembl_rdf's bin/rapper_postprocess.sh uses. This makes `rapper` (raptor2)
-a hard dependency of every rule's output, not just an optional checker --
-on the cluster, make sure it's on PATH (e.g. `module load bioinfo-itrop
-raptor2/2.0.16`, same module ensembl_rdf uses) before running this, or
-every validate_turtle job fails with "command not found".
+a hard dependency of every rule's output; validate_turtle loads it itself
+(same defensive module-loading block as ensembl_rdf's bin/convert_slurm.sh
+and bin/rapper_postprocess.sh use, overridable the same way via MODULES/
+SITE_INIT) rather than relying on the submitting shell's own `module load`
+having propagated to the job -- confirmed on the cluster not to, since a
+non-interactive batch shell may never source the site's module init script.
 """
 import os
 from snakemake.exceptions import WorkflowError
@@ -181,6 +183,23 @@ rule validate_turtle:
         # this constraint.
         name=r".+(?<!\.raw)",
     shell:
+        # Same defensive module-loading block as ensembl_rdf's
+        # bin/convert_slurm.sh/bin/rapper_postprocess.sh (see module
+        # docstring above for why it's needed): `module` is a shell
+        # function a non-login batch shell may not have sourced, so this
+        # loads the site's module init script itself before calling
+        # `module load`, rather than assuming the submitting shell's own
+        # `module load` reached this job. MODULES/SITE_INIT are
+        # overridable from the environment exactly as in those scripts.
+        "MODULES=${{MODULES-\"bioinfo-itrop raptor2/2.0.16\"}}; "
+        "if [ -n \"$MODULES\" ]; then "
+        "for f in \"${{SITE_INIT:-}}\" /etc/profile.d/modules.sh /etc/profile.d/lmod.sh "
+        "\"${{MODULESHOME:-}}/init/bash\" /usr/share/lmod/lmod/init/bash /usr/share/Modules/init/bash; do "
+        "[ -n \"$f\" ] && [ -f \"$f\" ] && . \"$f\" && break; done; "
+        "if type module >/dev/null 2>&1; then "
+        "for m in $MODULES; do module load \"$m\" || echo \"Warning: could not load module $m\" >&2; done; "
+        "else echo \"Warning: no module command; skipping $MODULES\" >&2; fi; "
+        "fi; "
         "rapper -i turtle -o turtle {input} > {output} 2> {output}.rapper.log; "
         "status=$?; cat {output}.rapper.log >&2; "
         "if [ $status -eq 0 ]; then rm -f {output}.rapper.log; fi; "
