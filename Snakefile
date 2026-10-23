@@ -112,13 +112,14 @@ STRINGDB_SPECIES = sorted(AGROLD_TAXON_ID)
 # UniProt publishes ONE flat-file per taxonomic division (e.g. "plants"),
 # covering every species in it -- unlike planttfdb/stringdb above, there is
 # no per-species variant to fetch, so this is keyed by taxon id rather than
-# species name: riceKB/uniprotToRDF.py itself filters the species it wants
-# out of the shared file (see download_uniprot/uniprot rules below).
-# uniprot_trembl_plants.dat.gz is ~14GB -- both banks stay gzip-compressed
-# on disk (download_uniprot doesn't decompress them, and uniprotToRDF.py
-# streams/decompresses on the fly), so there's no decompressed copy eating
-# scratch space, at the cost of re-decompressing the file in every one of
-# UNIPROT_TAXA's jobs rather than once.
+# species name. Letting riceKB/uniprotToRDF.py filter its one taxon out of
+# that shared file directly, once per taxon, meant re-decompressing and
+# re-scanning the whole file (up to ~14GB compressed for trembl) once per
+# taxon -- cheap for a handful of species, but that's what pushed some
+# trembl taxa past even a generous SLURM runtime. split_uniprot below scans
+# it exactly once instead, fanning every record out to whichever of
+# UNIPROT_TAXA it belongs to; riceKB/uniprotToRDF.py itself didn't need to
+# change, since it already reads plain text or gzip input the same way.
 UNIPROT_BANKS = ["sprot", "trembl"]
 UNIPROT_TAXA = sorted(set(AGROLD_TAXON_ID.values()))
 
@@ -370,11 +371,39 @@ rule download_uniprot:
         "-o {config[uniprot][data_dir]}"
 
 
+rule split_uniprot:
+    """Split one bank's shared plants division dump into one plain-text
+    file per taxon in UNIPROT_TAXA, in a single pass (bin/
+    split_uniprot_by_taxon.py), instead of letting the uniprot rule below
+    re-decompress and re-scan the whole (up to ~14GB compressed, for
+    trembl) file once per taxon -- see UNIPROT_TAXA's comment above for why
+    that mattered. Always writes a file for every requested taxon, even an
+    empty one for a taxon this bank has no entry for, so a taxon with
+    nothing to convert still fails the uniprot job below exactly as it did
+    reading directly from the undivided dump (see that rule's docstring).
+
+    One job per bank, not per taxon: declared temp() per output taxon file,
+    so Snakemake deletes each one once its own uniprot job (not every
+    taxon's -- each taxon has its own file here) has consumed it.
+    """
+    input:
+        os.path.join(config["uniprot"]["data_dir"], "uniprot_{bank}_plants.dat.gz"),
+    output:
+        [temp(f"{OUTPUT_DIR}/uniprot_split/{{bank}}/{taxon}.dat") for taxon in UNIPROT_TAXA],
+    wildcard_constraints:
+        bank=r"sprot|trembl",
+    params:
+        output_dir=f"{OUTPUT_DIR}/uniprot_split/{{bank}}",
+        taxa=" ".join(UNIPROT_TAXA),
+    shell:
+        "python3 bin/split_uniprot_by_taxon.py {input} {params.output_dir} {params.taxa}"
+
+
 rule uniprot:
     """UniProt protein records -- plus the keywords and PubMed citations
-    they reference -- for one taxon and one bank (sprot or trembl),
-    filtered out of the shared, still-gzipped plants division dump by
-    riceKB/uniprotToRDF.py itself.
+    they reference -- for one taxon and one bank (sprot or trembl), out of
+    that taxon's own split (split_uniprot above) of the plants division
+    dump.
 
     {taxon} is a free wildcard here (not looked up via AGROLD_TAXON_ID,
     since output paths can't be computed by a function in Snakemake); it's
@@ -393,7 +422,7 @@ rule uniprot:
     validate_turtle still picks them up the same way as everywhere else.
     """
     input:
-        os.path.join(config["uniprot"]["data_dir"], "uniprot_{bank}_plants.dat.gz"),
+        f"{OUTPUT_DIR}/uniprot_split/{{bank}}/{{taxon}}.dat",
     output:
         protein=temp(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.raw.ttl"),
         keyword=temp(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.raw.ttl"),
