@@ -395,6 +395,13 @@ rule split_uniprot:
     params:
         output_dir=f"{OUTPUT_DIR}/uniprot_split/{{bank}}",
         taxa=" ".join(UNIPROT_TAXA),
+    resources:
+        # The profile's 30-minute default was sized for the small per-rule
+        # jobs elsewhere in this pipeline; this rule's single pass over the
+        # full trembl dump (~14GB compressed) is the one job that used to
+        # time out when done per-taxon (see UNIPROT_TAXA's comment above),
+        # so give it room even though it now runs just once per bank.
+        runtime=360,
     shell:
         "python3 bin/split_uniprot_by_taxon.py {input} {params.output_dir} {params.taxa}"
 
