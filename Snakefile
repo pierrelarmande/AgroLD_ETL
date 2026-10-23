@@ -7,6 +7,7 @@ internals. Paths come from config.yaml.
     snakemake --cores 1 --configfile config.yaml
     snakemake --cores 1 -n                       # dry run
     snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
+    snakemake --profile profiles/slurm uniprot_all  # just uniprot, skipping all's other sources
 
 interpro, oryzaBaseParser, plantTFDB, qtaroModel, stringDB and uniprotToRDF
 are wired in so far. Add a source by giving it its own `rule <name>:` below
@@ -133,6 +134,19 @@ rule all:
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+        expand(f"{OUTPUT_DIR}/mappings_{{taxon}}_{{bank}}_gene_prot.tsv", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
+
+
+rule uniprot_all:
+    """Just the uniprot outputs (both banks, every taxon) -- a convenience
+    target for running/testing this one source without the rest of the
+    pipeline's other data sources and their own prerequisites (e.g. a
+    manually-placed data/oryzabase export that `all` also depends on).
+    """
+    input:
         expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.plants.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
         expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.keyword.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
         expand(f"{OUTPUT_DIR}/uniprot_{{taxon}}_{{bank}}.pubmed.ttl", taxon=UNIPROT_TAXA, bank=UNIPROT_BANKS),
