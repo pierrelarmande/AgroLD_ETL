@@ -37,8 +37,13 @@ def geneParser(infile):
 
 
 def qtlParser(infile):
-    """Qtaro QTL export -> DataFrame (accessed positionally, see module docstring)."""
-    return pd.read_csv(infile, sep="|", dtype='str', encoding="ISO-8859-1")
+    """Qtaro QTL export -> DataFrame (accessed positionally, see module docstring).
+
+    Unlike the gene export, this file has no header row (verified against a
+    real export, datasets/qtaro.csv) -- header=None keeps pandas from
+    treating the first data row as column names.
+    """
+    return pd.read_csv(infile, sep="|", dtype='str', header=None, encoding="ISO-8859-1")
 
 
 '''
@@ -98,16 +103,21 @@ def qtaroQTLRDF(infile, output_file):
         for records in qtl_ds.to_numpy():
             qtl_counter += 1
 
+            # Same quote-wrapping convention as the gene export (see
+            # qtaroGeneRDF) shows up here on qtl_gene_name and trait_name --
+            # strip it before escaping, or the literal quote breaks the
+            # Turtle syntax.
             qtl_buffer = "<" + base_resource_uri + "qtaro.qtl/" + records[0] + ">\n"
             qtl_buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "QTL" + " ;\n"
-            qtl_buffer += "\t" + rdfs_ns + "label" + "\t" + '"%s"' % turtle_literal(records[1]) + " ;\n"
+            if pd.notna(records[1]):
+                qtl_buffer += "\t" + rdfs_ns + "label" + "\t" + '"%s"' % turtle_literal(records[1].strip('"')) + " ;\n"
             qtl_buffer += "\t" + faldo_ns + "location" + "\t" + "<" + chromosome_uri + taxon_id + "/{}:{}-{}:1>".format(records[5], records[6], records[7]) + " ;\n"
             if pd.notna(records[2]):
                 qtl_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[2]) + " ;\n"
             if pd.notna(records[3]):
                 qtl_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[3]) + " ;\n"
             if pd.notna(records[26]):
-                qtl_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[26]) + " ;\n"
+                qtl_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[26].strip('"')) + " ;\n"
             if pd.notna(records[9]):
                 qtl_buffer += "\t" + base_vocab_ns + "lod" + "\t" + '"%s"' % turtle_literal(records[9]) + " ;\n"
             qtl_buffer += "\t" + base_vocab_ns + "date" + "\t" + '"%s"' % turtle_literal(records[29]) + " .\n\n"
