@@ -173,6 +173,26 @@ def getRDFHeaders():
     headersBuffer += pr + "\t" + base_resource_ns + "<" + base_resource_uri + "> .\n\n"
     return headersBuffer
 
+def load_msu_rap_mapping(infile):
+    """{MSU gene id (transcript suffix stripped): RAP/IRGSP gene id}, built
+    from RAP-DB's RAP-MSU mapping file (tab-separated: RAP id, then a
+    comma-separated list of MSU transcript ids it corresponds to, e.g.
+    "Os01g0100100\\tLOC_Os01g01010.1,LOC_Os01g01010.2" -- or "...\\tNone"
+    when RAP-DB has no MSU match for that RAP id, skipped here). Several
+    transcripts of the same gene collapse to the same key once their
+    ".N" suffix is stripped, which is what callers with a bare MSU gene
+    id (no transcript number) need to look up.
+    """
+    mapping = {}
+    with open(infile, 'r') as f:
+        for line in f:
+            rap_id, msu_field = line.rstrip('\n').split('\t')
+            if msu_field == 'None':
+                continue
+            for msu_transcript in msu_field.split(','):
+                mapping[msu_transcript.split('.')[0]] = rap_id
+    return mapping
+
 def turtle_literal(value):
     """Escape a string for use inside a Turtle short string literal ("...").
 

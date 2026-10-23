@@ -49,8 +49,10 @@ def qtlParser(infile):
 '''
  RDF Converters
 '''
-def qtaroGeneRDF(infile, output_file):
+def qtaroGeneRDF(infile, output_file, msu_rap_mapping=None):
     gene_counter = 0
+    converted_counter = 0
+    unmapped_counter = 0
     rap_pattern = re.compile(r'^Os\d{2}g\d{7}$')
 
     print("*********** Parsing Qtaro Gene data ***************\n")
@@ -60,8 +62,17 @@ def qtaroGeneRDF(infile, output_file):
     with open(output_file, "w") as outHandle:
         outHandle.write(str(getRDFHeaders()))
         for records in gene_ds.to_numpy():
-            if not rap_pattern.match(records[8]):
-                continue
+            locus_id = records[8]
+            if not rap_pattern.match(locus_id):
+                # A handful of QTARO rows give an MSU id (e.g.
+                # "LOC_Os03g15680") instead of a RAP/IRGSP one -- convert it
+                # via RAP-DB's RAP-MSU mapping rather than dropping the gene.
+                rap_id = msu_rap_mapping.get(locus_id.split('.')[0]) if msu_rap_mapping else None
+                if rap_id is None:
+                    unmapped_counter += 1
+                    continue
+                locus_id = rap_id
+                converted_counter += 1
             gene_counter += 1
 
             # The source wraps a field's whole value in an extra pair of
@@ -72,13 +83,13 @@ def qtaroGeneRDF(infile, output_file):
             # comma-separated second DOI) -- strip that wrapper before
             # escaping the value for Turtle, or the literal quote survives
             # into the output and breaks the syntax.
-            gene_buffer = base_resource_ns + records[8] + "\n"
+            gene_buffer = base_resource_ns + locus_id + "\n"
             gene_buffer += "\t" + rdf_ns + "type" + "\t" + base_vocab_ns + "Gene" + " ;\n"
             gene_buffer += "\t" + rdfs_ns + "label" + "\t" + '"%s"' % turtle_literal(records[1].strip('"')) + " ;\n"
             gene_buffer += "\t" + skos_ns + "prefSymbol" + "\t" + '"%s"' % turtle_literal(records[2]) + " ;\n"
             gene_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[3]) + " ;\n"
             gene_buffer += "\t" + base_vocab_ns + "hasTrait" + "\t" + '"%s"' % turtle_literal(records[4]) + " ;\n"
-            gene_buffer += "\t" + rdfs_ns + "seeAlso" + "\t" + ensembl_ns + records[8] + " ;\n"
+            gene_buffer += "\t" + rdfs_ns + "seeAlso" + "\t" + ensembl_ns + locus_id + " ;\n"
             gene_buffer += "\t" + dcterms_ns + "description" + "\t" + '"%s"' % turtle_literal(records[11].strip('"')) + " ;\n"
             if pd.notna(records[12]):
                 for doi in records[12].strip('"').split(','):
@@ -87,7 +98,9 @@ def qtaroGeneRDF(infile, output_file):
                         gene_buffer += "\t" + dc_ns + "references" + "\t" + "<" + doi_uri + doi + "> ;\n"
             gene_buffer = re.sub(' ;$', ' .\n', gene_buffer)
             outHandle.write(gene_buffer)
-    print("Number of Genes: %s\n" % (str(gene_counter)))
+    print("Number of Genes: %s (%s converted from an MSU id, %s dropped for "
+          "lacking any RAP id and having no MSU match)\n"
+          % (gene_counter, converted_counter, unmapped_counter))
     print("********* Qtaro GENE RDF completed ***********\n")
 
 
@@ -156,6 +169,11 @@ def main():
     gene = sub.add_parser("genes", help="convert the QTARO gene export")
     gene.add_argument("input_file", help="QTARO gene export ('|'-separated, header row)")
     gene.add_argument("output_file", help="output Turtle file")
+    gene.add_argument("--msu-rap-mapping",
+                       help="RAP-DB's RAP-MSU mapping file (e.g. RAP-MSU_2022-09-01.txt), "
+                            "used to convert the handful of rows that give an MSU id "
+                            "(LOC_Os...) instead of a RAP/IRGSP one; without it, those "
+                            "rows are dropped instead of converted")
 
     qtl = sub.add_parser("qtl", help="convert the QTARO QTL export")
     qtl.add_argument("input_file", help="QTARO QTL export ('|'-separated, header row)")
@@ -163,7 +181,8 @@ def main():
 
     args = parser.parse_args()
     if args.command == "genes":
-        qtaroGeneRDF(args.input_file, args.output_file)
+        mapping = load_msu_rap_mapping(args.msu_rap_mapping) if args.msu_rap_mapping else None
+        qtaroGeneRDF(args.input_file, args.output_file, mapping)
     else:
         qtaroQTLRDF(args.input_file, args.output_file)
 

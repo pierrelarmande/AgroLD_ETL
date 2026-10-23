@@ -25,6 +25,19 @@ oryzabase:
   # to this fixed path by hand.
   gene_list: "data/oryzabase/OryzabaseGeneListEn.txt"
 
+qtaro:
+  gene_export: "data/qtaro/qtaro_gene.csv"
+  qtl_export: "data/qtaro/qtaro_qtl.csv"
+
+rapdb_msu:
+  # RAP-DB's RAP<->MSU gene id cross-reference
+  # (https://rapdb.dna.naro.go.jp/download/archive/), dated like oryzabase
+  # above -- rename the download to this fixed path. Used to convert a
+  # locus id given in MSU format (LOC_Os...) to RAP/IRGSP format (see
+  # riceKB/utils.py:load_msu_rap_mapping) instead of dropping it, e.g. in
+  # riceKB/qtaroModel.py's "genes" command.
+  mapping_file: "data/rapdb_msu/RAP-MSU.txt"
+
 # The single source of truth for which species AgroLD covers and what each
 # one's NCBI taxon id is -- shared with ensembl_rdf, so the two pipelines
 # never disagree. Assumes ensembl_rdf is checked out as a sibling directory;
