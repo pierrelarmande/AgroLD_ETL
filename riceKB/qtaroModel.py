@@ -170,7 +170,8 @@ def main():
     gene.add_argument("input_file", help="QTARO gene export ('|'-separated, header row)")
     gene.add_argument("output_file", help="output Turtle file")
     gene.add_argument("--msu-rap-mapping",
-                       help="RAP-DB's RAP-MSU mapping file (e.g. RAP-MSU_2022-09-01.txt), "
+                       help="RAP-DB's RAP-MSU mapping file (e.g. RAP-MSU_2026-02-05.txt.gz, "
+                            "gzip-compressed or plain text), "
                             "used to convert the handful of rows that give an MSU id "
                             "(LOC_Os...) instead of a RAP/IRGSP one; without it, those "
                             "rows are dropped instead of converted")

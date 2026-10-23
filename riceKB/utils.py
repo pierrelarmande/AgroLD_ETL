@@ -5,6 +5,7 @@ from globalVars import base_vocab_ns
 from gffParser import *
 import rdflib
 from rdflib.graph import Graph
+import gzip
 import pprint
 import re
 import os
@@ -182,9 +183,13 @@ def load_msu_rap_mapping(infile):
     transcripts of the same gene collapse to the same key once their
     ".N" suffix is stripped, which is what callers with a bare MSU gene
     id (no transcript number) need to look up.
+
+    RAP-DB publishes this file gzip-compressed (.txt.gz); infile ending in
+    ".gz" is read as such, otherwise as plain text.
     """
+    opener = gzip.open if infile.endswith('.gz') else open
     mapping = {}
-    with open(infile, 'r') as f:
+    with opener(infile, 'rt') as f:
         for line in f:
             rap_id, msu_field = line.rstrip('\n').split('\t')
             if msu_field == 'None':

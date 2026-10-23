@@ -36,7 +36,7 @@ rapdb_msu:
   # locus id given in MSU format (LOC_Os...) to RAP/IRGSP format (see
   # riceKB/utils.py:load_msu_rap_mapping) instead of dropping it, e.g. in
   # riceKB/qtaroModel.py's "genes" command.
-  mapping_file: "data/rapdb_msu/RAP-MSU.txt"
+  mapping_file: "data/rapdb_msu/RAP-MSU.txt.gz"
 
 # The single source of truth for which species AgroLD covers and what each
 # one's NCBI taxon id is -- shared with ensembl_rdf, so the two pipelines
