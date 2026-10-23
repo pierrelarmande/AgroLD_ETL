@@ -173,6 +173,23 @@ def getRDFHeaders():
     headersBuffer += pr + "\t" + base_resource_ns + "<" + base_resource_uri + "> .\n\n"
     return headersBuffer
 
+def turtle_literal(value):
+    """Escape a string for use inside a Turtle short string literal ("...").
+
+    A bare newline isn't legal inside a short "..." literal (only inside
+    Turtle's long triple-quoted form), so a field containing one -- or an
+    unescaped quote or backslash -- breaks the Turtle syntax outright.
+    Stripping those characters out (as several parsers used to do) silently
+    loses data instead of fixing the syntax; escaping them is the correct fix.
+    """
+    value = str(value)
+    value = value.replace('\\', '\\\\')
+    value = value.replace('"', '\\"')
+    value = value.replace('\n', '\\n')
+    value = value.replace('\r', '\\r')
+    value = value.replace('\t', '\\t')
+    return value
+
 def RDF_validation(ttl_buffer,ttl_handle,oryid,output_dir):
     ttl_handle.write(ttl_buffer)
     # try:

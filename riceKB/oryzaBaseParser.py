@@ -42,26 +42,6 @@ gramene_pattern = re.compile(r'^GR\:\d{7}$')
 prot_pattern = re.compile(r'^([A-N,R-Z][0-9]([A-Z][A-Z, 0-9][A-Z, 0-9][0-9]){1,2})|([O,P,Q][0-9][A-Z, 0-9][A-Z, 0-9][A-Z, 0-9][0-9])(\.\d+)?$')
 
 
-def turtle_literal(value):
-    """Escape a string for use inside a Turtle short string literal ("...").
-
-    The previous version of this parser only stripped quotes and
-    backslashes out of literals instead of escaping them, and didn't touch
-    embedded newlines/tabs/carriage returns at all -- a bare newline isn't
-    legal inside a short "..." literal (only inside Turtle's long triple-
-    quoted form), so a field like Explanation containing one broke the Turtle syntax
-    outright. That is the actual source of the "special characters/spaces
-    pollute the Turtle" errors this fixes, not a missing safety net.
-    """
-    value = str(value)
-    value = value.replace('\\', '\\\\')
-    value = value.replace('"', '\\"')
-    value = value.replace('\n', '\\n')
-    value = value.replace('\r', '\\r')
-    value = value.replace('\t', '\\t')
-    return value
-
-
 def oryzaBaseParser(input_file):
     array = pd.read_csv(input_file, sep='\t', dtype='str', skip_blank_lines=True)
     array.fillna('', inplace=True)
