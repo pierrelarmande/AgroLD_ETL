@@ -8,9 +8,9 @@ internals. Paths come from config.yaml.
     snakemake --cores 1 -n                       # dry run
     snakemake --profile profiles/slurm           # on the cluster, one sbatch job per rule
 
-interpro, oryzaBaseParser, plantTFDB, stringDB and uniprotToRDF are wired in
-so far. Add a source by giving it its own `rule <name>:` below and listing
-it in `rule all`'s inputs.
+interpro, oryzaBaseParser, plantTFDB, qtaroModel, stringDB and uniprotToRDF
+are wired in so far. Add a source by giving it its own `rule <name>:` below
+and listing it in `rule all`'s inputs.
 
 plantTFDB's, stringdb's and uniprot's raw input is fetched on demand
 (download_* rules) and deleted again as soon as it's converted (temp()
@@ -127,6 +127,8 @@ rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
         f"{OUTPUT_DIR}/oryzabase_genes.ttl",
+        f"{OUTPUT_DIR}/qtaro_genes.ttl",
+        f"{OUTPUT_DIR}/qtaro_qtl.ttl",
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}_regulation.ttl", species=PLANTTFDB_SPECIES),
         expand(f"{OUTPUT_DIR}/stringdb_{{species}}.ttl", species=STRINGDB_SPECIES),
@@ -210,6 +212,36 @@ rule oryzabase:
         "--pub-dict {output.pub_dict} --pub-dict-rapdb {output.pub_dict_rapdb} "
         "--pub-dict-msu {output.pub_dict_msu} --pub-dict-hub {output.pub_dict_hub} "
         "--dict-po {output.dict_po} --dict-to {output.dict_to}"
+
+
+rule qtaro_genes:
+    """QTARO's gene export. A handful of rows give an MSU locus id
+    (LOC_Os...) instead of a RAP/IRGSP one; --msu-rap-mapping converts
+    those via RAP-DB's RAP-MSU mapping (config["rapdb_msu"]) instead of
+    dropping them, see riceKB/utils.py:load_msu_rap_mapping.
+
+    Tracked in git under data/qtaro/ (small enough, see config.yaml), so
+    unlike oryzabase above there's nothing to place by hand here.
+    """
+    input:
+        gene_export=config["qtaro"]["gene_export"],
+        mapping=config["rapdb_msu"]["mapping_file"],
+    output:
+        temp(f"{OUTPUT_DIR}/qtaro_genes.raw.ttl"),
+    shell:
+        "python3 riceKB/qtaroModel.py genes {input.gene_export} {output} "
+        "--msu-rap-mapping {input.mapping}"
+
+
+rule qtaro_qtl:
+    """QTARO's QTL export (no MSU ids to convert here, unlike qtaro_genes
+    above -- see config["qtaro"]["qtl_export"])."""
+    input:
+        config["qtaro"]["qtl_export"],
+    output:
+        temp(f"{OUTPUT_DIR}/qtaro_qtl.raw.ttl"),
+    shell:
+        "python3 riceKB/qtaroModel.py qtl {input} {output}"
 
 
 rule download_planttfdb:
