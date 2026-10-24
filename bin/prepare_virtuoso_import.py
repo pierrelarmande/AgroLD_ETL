@@ -112,10 +112,23 @@ def collect_agrold_etl_files(output_dir, taxon_id_by_species):
     return graphs, unmatched
 
 
+def collect_compara_files(compara_dir):
+    """[file paths] of every orthology.ttl(.gz) directly inside compara_dir
+    (e.g. .../ensembl_compara_plants_63_116/orthology.ttl.gz) -- all go into
+    the one dedicated compara graph, regardless of where this directory
+    lives (a sibling of the species *_core_*/ directories in a plain
+    ensembl_rdf checkout, or its own separate path on shared storage, e.g.
+    this cluster's /projects/xxl/agrold/compara/<version>/).
+    """
+    return [os.path.join(compara_dir, name) for name in sorted(os.listdir(compara_dir))
+            if name.startswith("orthology.ttl")]
+
+
 def collect_ensembl_rdf_files(root_dir, taxon_id_by_species):
     """{graph_iri: [file paths]} from the ensembl_rdf sibling checkout:
     every <species>_core_*/'s *.ttl(.gz) into that species' graph, and
-    every *_compara_*/orthology.ttl(.gz) into the one compara graph.
+    (if present here -- see --compara-dir otherwise) every *_compara_*/'s
+    orthology.ttl(.gz) into the one compara graph.
     """
     graphs = {}
     unmatched = []
@@ -129,9 +142,8 @@ def collect_ensembl_rdf_files(root_dir, taxon_id_by_species):
             continue
 
         if "_compara_" in entry:
-            for name in sorted(os.listdir(entry_path)):
-                if name.startswith("orthology.ttl"):
-                    add(generic_graph("compara/orthology"), os.path.join(entry_path, name))
+            for path in collect_compara_files(entry_path):
+                add(generic_graph("compara/orthology"), path)
             continue
 
         m = ENSEMBL_RDF_SPECIES_DIR_RE.match(entry)
@@ -202,7 +214,15 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="AgroLD_ETL config (default: config.yaml)")
     parser.add_argument("--ensembl-rdf-root",
                          help="ensembl_rdf sibling checkout root (default: derived from "
-                              "config.yaml's ensembl_rdf.species_file)")
+                              "config.yaml's ensembl_rdf.species_file); its *_core_*/ "
+                              "subdirectories give the species data, and its *_compara_*/ "
+                              "one (if present) the compara one, unless --compara-dir is given")
+    parser.add_argument("--compara-dir",
+                         help="directory holding orthology.ttl(.gz) directly (e.g. "
+                              ".../ensembl_compara_plants_63_116), when it isn't a "
+                              "*_compara_*/ subdirectory of --ensembl-rdf-root -- e.g. this "
+                              "cluster's /projects/xxl/agrold/compara/ensembl_compara_plants_63_116, "
+                              "a sibling of /projects/xxl/agrold/ensembl rather than inside it")
     args = parser.parse_args()
 
     import yaml
@@ -220,6 +240,10 @@ def main():
     rdf_graphs, unmatched_rdf = collect_ensembl_rdf_files(ensembl_rdf_root, taxon_id_by_species)
     for graph_iri, paths in rdf_graphs.items():
         graphs.setdefault(graph_iri, []).extend(paths)
+
+    if args.compara_dir:
+        graphs.setdefault(generic_graph("compara/orthology"), []).extend(
+            collect_compara_files(args.compara_dir))
 
     os.makedirs(args.out_dir, exist_ok=True)
     populate(graphs, args.out_dir)
