@@ -40,6 +40,11 @@ import os
 import re
 import sys
 
+# Unlike riceKB/*.py scripts (run by the Snakefile with the repo root on
+# PYTHONPATH via shell.prefix), this script is meant to be run by hand, so
+# it adds the repo root (this file's parent's parent) to sys.path itself
+# instead of relying on the caller's environment.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from riceKB.utils import load_agrold_taxon_ids
 
 GRAPH_BASE = "http://purl.agrold.org/graph"
