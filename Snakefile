@@ -41,6 +41,7 @@ non-interactive batch shell may never source the site's module init script.
 """
 import os
 from snakemake.exceptions import WorkflowError
+from riceKB.utils import load_agrold_taxon_ids
 
 configfile: "config.yaml"
 
@@ -53,46 +54,15 @@ shell.prefix(f'export PYTHONPATH="{workflow.basedir}:$PYTHONPATH"; ')
 
 OUTPUT_DIR = config["output_dir"]
 
-
-def load_agrold_taxon_ids():
-    """{production_name: taxon_id} for the species list ensembl_rdf and this
-    pipeline share (config.yaml's ensembl_rdf section) -- the single source
-    of truth for which species exist and what each one's NCBI taxon is, so
-    the two pipelines never disagree. species_agrold.yaml names the species;
-    species_EnsemblPlants_63.txt (tab-separated, #name/species/.../
-    taxonomy_id/...) is where the taxon id actually comes from.
-    """
-    import yaml
-
-    species_file = config["ensembl_rdf"]["species_file"]
-    species_table = config["ensembl_rdf"]["species_table"]
-    for path in (species_file, species_table):
-        if not os.path.exists(path):
-            raise WorkflowError(
-                f"ensembl_rdf config not found at {path} -- ensembl_rdf is "
-                "expected as a sibling checkout; edit config.yaml's "
-                "ensembl_rdf section if yours lives elsewhere.")
-
-    with open(species_file) as f:
-        wanted = set(yaml.safe_load(f)["species"])
-
-    taxon_id = {}
-    with open(species_table) as f:
-        next(f)  # header
-        for line in f:
-            fields = line.rstrip("\n").split("\t")
-            name = fields[1]
-            if name in wanted:
-                taxon_id[name] = fields[3]
-
-    missing = wanted - set(taxon_id)
-    if missing:
-        raise WorkflowError(
-            f"{species_table} has no taxon id for: {sorted(missing)}")
-    return taxon_id
-
-
-AGROLD_TAXON_ID = load_agrold_taxon_ids()
+# {production_name: taxon_id} for every AgroLD species -- the single source
+# of truth for which species exist and what each one's NCBI taxon is, so
+# nothing that keys on either one (this Snakefile, bin/prepare_virtuoso_import.py)
+# disagrees with the others. See riceKB/utils.py:load_agrold_taxon_ids.
+try:
+    AGROLD_TAXON_ID = load_agrold_taxon_ids(
+        config["ensembl_rdf"]["species_file"], config["ensembl_rdf"]["species_table"])
+except RuntimeError as e:
+    raise WorkflowError(str(e))
 
 
 # Like stringdb below, plantTFDB/PlantRegMap's raw input is downloaded on

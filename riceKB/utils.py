@@ -1,8 +1,7 @@
 import sys
-print(sys.path)
-from globalVars import *
-from globalVars import base_vocab_ns
-from gffParser import *
+from riceKB.globalVars import *
+from riceKB.globalVars import base_vocab_ns
+from riceKB.gffParser import *
 import rdflib
 from rdflib.graph import Graph
 import gzip
@@ -197,6 +196,43 @@ def load_msu_rap_mapping(infile):
             for msu_transcript in msu_field.split(','):
                 mapping[msu_transcript.split('.')[0]] = rap_id
     return mapping
+
+def load_agrold_taxon_ids(species_file, species_table):
+    """{production_name: taxon_id} for the species list ensembl_rdf and the
+    AgroLD_ETL pipeline share -- the single source of truth for which
+    species exist and what each one's NCBI taxon is, so nothing that keys
+    on either one (the Snakefile, bin/prepare_virtuoso_import.py) disagrees
+    with the others. species_file (YAML, key "species") names the species;
+    species_table (tab-separated, #name/species/.../taxonomy_id/...) is
+    where the taxon id actually comes from.
+    """
+    import yaml
+
+    for path in (species_file, species_table):
+        if not os.path.exists(path):
+            raise RuntimeError(
+                f"ensembl_rdf config not found at {path} -- ensembl_rdf is "
+                "expected as a sibling checkout; edit config.yaml's "
+                "ensembl_rdf section if yours lives elsewhere.")
+
+    with open(species_file) as f:
+        wanted = set(yaml.safe_load(f)["species"])
+
+    taxon_id = {}
+    with open(species_table) as f:
+        next(f)  # header
+        for line in f:
+            fields = line.rstrip("\n").split("\t")
+            name = fields[1]
+            if name in wanted:
+                taxon_id[name] = fields[3]
+
+    missing = wanted - set(taxon_id)
+    if missing:
+        raise RuntimeError(
+            f"{species_table} has no taxon id for: {sorted(missing)}")
+    return taxon_id
+
 
 def turtle_literal(value):
     """Escape a string for use inside a Turtle short string literal ("...").
