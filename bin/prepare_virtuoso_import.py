@@ -59,7 +59,7 @@ GENERIC_DATASETS = {
     "interpro.ttl": "interpro",
 }
 
-RICE_DATASETS = {"oryzabase_genes.ttl", "qtaro_genes.ttl", "qtaro_qtl.ttl"}
+RICE_DATASETS = {"oryzabase_genes.ttl", "reference_oryzabase.ttl", "qtaro_genes.ttl", "qtaro_qtl.ttl"}
 
 UNIPROT_RE = re.compile(r"^uniprot_(?P<taxon>\d+)_(?:sprot|trembl)\..+\.ttl$")
 PLANTTFDB_RE = re.compile(r"^planttfdb_(?P<species>.+?)(?:_regulation)?\.ttl$")

@@ -24,6 +24,9 @@ oryzabase:
   # automatically, so like interpro above, rename or symlink the download
   # to this fixed path by hand.
   gene_list: "data/oryzabase/OryzabaseGeneListEn.txt"
+  # OryzaBase's separate "Reference" export (literature, not genes) -- same
+  # on-demand/no-stable-URL situation as gene_list above.
+  reference: "data/oryzabase/Reference.txt"
 
 qtaro:
   gene_export: "data/qtaro/qtaro_gene.csv"

@@ -101,6 +101,7 @@ rule all:
     input:
         f"{OUTPUT_DIR}/interpro.ttl",
         f"{OUTPUT_DIR}/oryzabase_genes.ttl",
+        f"{OUTPUT_DIR}/reference_oryzabase.ttl",
         f"{OUTPUT_DIR}/qtaro_genes.ttl",
         f"{OUTPUT_DIR}/qtaro_qtl.ttl",
         expand(f"{OUTPUT_DIR}/planttfdb_{{species}}.ttl", species=PLANTTFDB_SPECIES),
@@ -216,6 +217,21 @@ rule oryzabase:
         "--pub-dict {output.pub_dict} --pub-dict-rapdb {output.pub_dict_rapdb} "
         "--pub-dict-msu {output.pub_dict_msu} --pub-dict-hub {output.pub_dict_hub} "
         "--dict-po {output.dict_po} --dict-to {output.dict_to}"
+
+
+rule oryzabase_reference:
+    """Gene<->PubMed links from OryzaBase's separate "Reference" export
+    (literature, not genes -- distinct download from oryzabase above),
+    joined against the oryzabase rule's pub_dict output by gene
+    symbol/synonym. See riceKB/oryzabaseReference.py.
+    """
+    input:
+        reference=config["oryzabase"]["reference"],
+        pub_dict=f"{OUTPUT_DIR}/pub_dictionnary.txt",
+    output:
+        temp(f"{OUTPUT_DIR}/reference_oryzabase.raw.ttl"),
+    shell:
+        "python3 riceKB/oryzabaseReference.py {input.reference} {input.pub_dict} {output}"
 
 
 rule qtaro_genes:
