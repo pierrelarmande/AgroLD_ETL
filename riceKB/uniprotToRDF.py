@@ -384,11 +384,22 @@ def upToRDF(up_files, rdf_out_dir,taxon_id,bank_name):  # , output_file
                                     symbol = re.sub(r'\s+', '', symbol)
                                     symbol = re.sub(r'\"+', '', symbol)
                                     symbol = symbol.strip()
-                                    rdf_buffer += "\t" + skos_ns + "altSymbol" + "\t" + '"%s"' % (
-                                        symbol) + " ;\n"
-                                    rdf_buffer += "\t" + base_vocab_ns + "orderedLocusName" + "\t" + '"%s"' % (
-                                        symbol) + " ;\n"
-                                    gene_buffer +=  prim_accession + "\t"  +  symbol + "\n"
+                                    # UniProt sometimes merges two paralogous/duplicate loci
+                                    # into one OrderedLocusNames entry with a '/'
+                                    # (e.g. "Os02g0318450/Os02g0318500") instead of two
+                                    # comma-separated entries -- split those too, one triple
+                                    # per actual locus, so a downstream join on this literal
+                                    # (e.g. against ensembl_rdf's gene dcterms:identifier)
+                                    # matches an individual locus id, not the combined string.
+                                    for locus in symbol.split('/'):
+                                        locus = locus.strip()
+                                        if not locus:
+                                            continue
+                                        rdf_buffer += "\t" + skos_ns + "altSymbol" + "\t" + '"%s"' % (
+                                            locus) + " ;\n"
+                                        rdf_buffer += "\t" + base_vocab_ns + "orderedLocusName" + "\t" + '"%s"' % (
+                                            locus) + " ;\n"
+                                        gene_buffer +=  prim_accession + "\t"  +  locus + "\n"
                             if entry_dic.get('ORFNames'):
                                 for symbol in entry_dic['ORFNames']:
                                     symbol = re.sub(r'{.+?}', '', symbol)
