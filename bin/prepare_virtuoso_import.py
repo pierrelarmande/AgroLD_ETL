@@ -16,16 +16,20 @@ Inputs:
       oryzabase_genes.ttl/qtaro_genes.ttl/qtaro_qtl.ttl (rice-specific,
       taxon RICE_TAXON_ID below), uniprot_<taxon>_<bank>.*.ttl (species, by
       taxon), planttfdb_<species>*.ttl/stringdb_<species>.ttl (species, by
-      ensembl_rdf production name).
+      ensembl_rdf production name), plus any reference ontology (go.owl,
+      ncbitaxon.owl, ...) placed in output_dir -- these aren't produced by
+      any Snakemake rule, so symlink or copy the downloaded file there by
+      hand, like interpro's/oryzabase's manually-placed raw inputs, and add
+      it to GENERIC_DATASETS below.
     - ensembl_rdf's sibling checkout: one <species>_core_<version>/
       directory per species (*.ttl/*.ttl.gz), and one *_compara_*/
       orthology.ttl(.gz) -- derived from config.yaml's
       ensembl_rdf.species_file path, or overridable with
       --ensembl-rdf-root.
 
-A *.ttl this script doesn't recognize is reported and skipped rather than
-guessed at, so a newly-added data source doesn't end up in the wrong graph
-(or silently nowhere) until this script is taught about it.
+A *.ttl/*.owl this script doesn't recognize is reported and skipped rather
+than guessed at, so a newly-added data source doesn't end up in the wrong
+graph (or silently nowhere) until this script is taught about it.
 
 Usage:
     python3 bin/prepare_virtuoso_import.py OUT_DIR
@@ -55,8 +59,17 @@ GRAPH_BASE = "http://purl.agrold.org/graph"
 # shared species table resolves "oryza_sativa" to.
 RICE_TAXON_ID = "39947"
 
+RDF_EXTENSIONS = (".ttl", ".owl")
+
+# Reference ontologies (manually placed in output_dir, see this module's
+# docstring) go here too, by their exact downloaded filename -- add one
+# entry per ontology file rather than matching by extension alone, so an
+# unrelated .owl/.ttl dropped into output_dir by mistake is still reported
+# as unmatched instead of silently landing in some ontology's graph.
 GENERIC_DATASETS = {
     "interpro.ttl": "interpro",
+    "go.owl": "go",
+    "ncbitaxon.owl": "ncbitaxon",
 }
 
 RICE_DATASETS = {"oryzabase_genes.ttl", "reference_oryzabase.ttl", "qtaro_genes.ttl", "qtaro_qtl.ttl"}
@@ -86,7 +99,7 @@ def collect_agrold_etl_files(output_dir, taxon_id_by_species):
         graphs.setdefault(graph_iri, []).append(path)
 
     for name in sorted(os.listdir(output_dir)):
-        if not name.endswith(".ttl"):
+        if not name.endswith(RDF_EXTENSIONS):
             continue  # e.g. mappings_<taxon>_<bank>_gene_prot.tsv -- not RDF
         path = os.path.join(output_dir, name)
 
@@ -198,6 +211,12 @@ def write_load_script(graphs, out_dir):
     """OUT_DIR/load.sql: one Virtuoso `ld_dir` registration per graph, then
     a single rdf_loader_run() -- see this module's docstring for the
     DirsAllowed caveat before running it on the Virtuoso host.
+
+    The glob is '*', not '*.ttl*': each graph directory is already
+    populated with exactly (and only) that graph's files by populate()
+    above, including non-.ttl ones like an ontology's .owl, so there's
+    nothing left to filter by extension here -- ld_dir sniffs the RDF
+    format itself.
     """
     load_sql = os.path.join(out_dir, "load.sql")
     with open(load_sql, "w") as f:
@@ -207,7 +226,7 @@ def write_load_script(graphs, out_dir):
             "DirsAllowed ini setting, or ld_dir itself raises an error.\n\n")
         for graph_iri in sorted(graphs):
             graph_dir = os.path.abspath(os.path.join(out_dir, graph_dir_name(graph_iri)))
-            f.write(f"ld_dir('{graph_dir}', '*.ttl*', '{graph_iri}');\n")
+            f.write(f"ld_dir('{graph_dir}', '*', '{graph_iri}');\n")
         f.write("\nrdf_loader_run();\ncheckpoint;\n")
     return load_sql
 
