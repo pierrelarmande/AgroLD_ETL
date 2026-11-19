@@ -42,11 +42,14 @@ conformance. A plain SPARQL CONSTRUCT/INSERT needs no such support and does the 
   with a `/` (e.g. `Os02g0318450/Os02g0318500`) instead of two comma-separated entries. Fixed to
   split on `/` too, emitting one `altSymbol`/`orderedLocusName` literal (and one `gene_prot.tsv` row)
   per actual locus, so a literal join matches an individual locus id instead of the combined string.
+- [x] `bin/sparql/encodes_from_orderedLocusName.sql`: the SPARQL INSERT/WHERE itself (case-insensitive
+  join on `dcterms:identifier` / `agrold_vocabulary:orderedLocusName`, predicate
+  `agrold_vocabulary:encodes`), one query covering every species graph (not hardcoded per taxon).
+  Run once with `isql < bin/sparql/encodes_from_orderedLocusName.sql`, after
+  `bin/prepare_virtuoso_import.py`'s `load.sql` has fully loaded both the species and uniprot
+  graphs. Not a Snakemake rule: it needs both datasets already loaded together in Virtuoso.
 
 ### To do
 
-- [ ] Write the SPARQL CONSTRUCT/INSERT (case-insensitive join on `dcterms:identifier` /
-  `agrold_vocabulary:orderedLocusName`, predicate `agrold_vocabulary:encodes`) and decide where it
-  runs from (one-off `isql`/SPARQL-endpoint step after a full load, likely alongside
-  `bin/prepare_virtuoso_import.py`'s `load.sql`, not a new Snakemake rule since it needs both
-  datasets already loaded together).
+- [ ] Run it for real once a full load exists, and sanity-check the result (e.g. count
+  `agrold_vocabulary:encodes` triples per species graph, spot-check a handful of pairs).
