@@ -70,6 +70,11 @@ GENERIC_DATASETS = {
     "interpro.ttl": "interpro",
     "go.owl": "go",
     "ncbitaxon.owl": "ncbitaxon",
+    "pato.owl": "pato",
+    "po.owl": "po",
+    "ro.owl": "ro",
+    "so.owl": "so",
+    "to.owl": "to",
 }
 
 RICE_DATASETS = {"oryzabase_genes.ttl", "reference_oryzabase.ttl", "qtaro_genes.ttl", "qtaro_qtl.ttl"}
